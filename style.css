@@ -1,0 +1,473 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --clr-bg: #f4f6f9;
+  --clr-surface: #ffffff;
+  --clr-primary: #2563eb;
+  --clr-primary-hover: #1d4ed8;
+  --clr-text: #1e293b;
+  --clr-text-muted: #64748b;
+  --clr-border: #e2e8f0;
+  --clr-pretax: #f59e0b;
+  --clr-roth: #10b981;
+  --clr-taxable: #6366f1;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  line-height: 1.5;
+}
+
+header {
+  background: var(--clr-primary);
+  color: #fff;
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  opacity: 0.85;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+/* Layout */
+.app-layout {
+  display: flex;
+  gap: 1.5rem;
+  max-width: 1440px;
+  margin: 1.5rem auto;
+  padding: 0 1.5rem;
+}
+
+.input-panel {
+  flex: 0 0 420px;
+  min-width: 0;
+}
+
+.output-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Panels */
+.panel-section {
+  background: var(--clr-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel-section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--clr-text);
+}
+
+/* Form Grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--clr-text-muted);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.form-grid label span {
+  font-weight: 500;
+}
+
+.form-grid input,
+.form-grid select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--clr-text);
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+.form-grid input:focus,
+.form-grid select:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--clr-border);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+  min-width: 0;
+  width: 100%;
+}
+
+.input-prefix:focus-within {
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-prefix .prefix {
+  padding: 0.45rem 0.5rem;
+  background: #f8fafc;
+  color: var(--clr-text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-right: 1px solid var(--clr-border);
+}
+
+.input-prefix input {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.input-prefix input:focus {
+  box-shadow: none;
+}
+
+/* Buttons */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--clr-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--clr-surface);
+  color: var(--clr-text);
+  border: 1px solid var(--clr-border);
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.export-import-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--clr-border);
+}
+
+.add-account-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.add-account-row select {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--clr-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+/* Account Cards */
+.account-card {
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.collapse-toggle {
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  cursor: pointer;
+  color: var(--clr-text-muted);
+  transition: transform 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.account-card.collapsed .collapse-toggle {
+  transform: rotate(-90deg);
+}
+
+.account-name-display {
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.tax-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tax-badge.pretax {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tax-badge.roth {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tax-badge.taxable {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--clr-text-muted);
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+
+.remove-btn:hover {
+  color: #ef4444;
+}
+
+.account-body {
+  padding: 0.75rem;
+  transition: max-height 0.3s ease;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.account-card.collapsed .account-body {
+  display: none;
+}
+
+.employer-match-field {
+  display: flex !important;
+}
+
+.employer-match-field.hidden {
+  display: none !important;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.summary-card {
+  background: var(--clr-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  text-align: center;
+}
+
+.card-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--clr-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.card-value {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--clr-primary);
+}
+
+/* Chart */
+.chart-container {
+  position: relative;
+  height: 350px;
+}
+
+/* Tax Summary */
+.tax-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.tax-group {
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--clr-border);
+}
+
+.tax-group h3 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tax-group .amount {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.tax-group .detail {
+  font-size: 0.78rem;
+  color: var(--clr-text-muted);
+  margin-top: 0.2rem;
+}
+
+.tax-impact {
+  grid-column: 1 / -1;
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+/* Table */
+.table-wrapper {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--clr-border);
+  border-radius: 6px;
+}
+
+#yearTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+#yearTable th,
+#yearTable td {
+  padding: 0.5rem 0.65rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--clr-border);
+}
+
+#yearTable th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--clr-text-muted);
+}
+
+#yearTable th:first-child,
+#yearTable td:first-child {
+  text-align: left;
+}
+
+#yearTable tr.retirement-row {
+  background: #eff6ff;
+  font-weight: 600;
+}
+
+#yearTable tr.retirement-row td {
+  border-top: 2px solid var(--clr-primary);
+  border-bottom: 2px solid var(--clr-primary);
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .input-panel {
+    flex: none;
+  }
+
+  .summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tax-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  header {
+    padding: 1rem;
+  }
+
+  .app-layout {
+    padding: 0 0.75rem;
+    margin: 0.75rem auto;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chart-container {
+    height: 250px;
+  }
+}

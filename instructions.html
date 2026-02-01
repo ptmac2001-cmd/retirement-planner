@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retirement Planner — Instructions</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.25rem; }
+    ul, ol { padding-left: 1.25rem; }
+    li { margin-bottom: 0.35rem; }
+    li ul, li ol { margin-top: 0.35rem; }
+    code { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
+    strong { color: #0f172a; }
+    em { color: #475569; }
+    .example { background: #f8fafc; border-left: 3px solid #2563eb; padding: 0.75rem 1rem; margin: 0.75rem 0; border-radius: 0 4px 4px 0; }
+    .example p { margin: 0.25rem 0; }
+    .formula { font-family: monospace; background: #f1f5f9; padding: 0.5rem 0.75rem; border-radius: 4px; display: block; margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Retirement Planner — Instructions</h1>
+
+  <h2>Getting Started</h2>
+  <p>Open <code>index.html</code> in any modern browser. No installation or build step required.</p>
+
+  <h2>Input Panel</h2>
+
+  <h3>Personal Info</h3>
+  <ul>
+    <li><strong>Date of Birth</strong> — Used to calculate your current age. The first year of projections accounts for the actual months remaining until your next birthday.</li>
+    <li><strong>Retirement Age</strong> — When you plan to stop working.</li>
+    <li><strong>Life Expectancy</strong> — How long to project finances (default: 90).</li>
+    <li><strong>Annual Income</strong> — Your current gross salary. Used to calculate employer match amounts.</li>
+    <li><strong>Withdrawal Strategy</strong> — How you plan to take money out in retirement (see Appendix for details).</li>
+    <li><strong>Monthly Expenses in Retirement</strong> — Shown when using the "Fixed Monthly Amount" strategy.</li>
+    <li><strong>Annual Withdrawal Rate</strong> — Shown when using the "Custom %" strategy.</li>
+  </ul>
+
+  <h3>Retirement Accounts</h3>
+  <p>Click <strong>+ Add Account</strong> to add an account. Choose a preset (401(k), Roth IRA, Traditional IRA, Brokerage, HSA) or select "Custom Account" to name your own.</p>
+  <p>Each account has:</p>
+  <ul>
+    <li><strong>Tax Treatment</strong> — Determines how withdrawals are taxed:
+      <ul>
+        <li><em>Pre-tax</em> (401(k), Traditional IRA) — taxed at your effective rate on withdrawal.</li>
+        <li><em>Roth / Post-tax</em> (Roth IRA, HSA) — tax-free withdrawals.</li>
+        <li><em>Taxable</em> (Brokerage) — estimated capital gains tax on growth portion.</li>
+      </ul>
+    </li>
+    <li><strong>Current Balance</strong> — What you have in the account today.</li>
+    <li><strong>Monthly Contribution</strong> — How much you add each month.</li>
+    <li><strong>Employer Match</strong> — Only shown for pre-tax accounts. Enter the match percentage and the salary cap it applies to.</li>
+    <li><strong>Annual Return</strong> — Expected yearly growth rate (default: 7%). This rate is used both before and during retirement.</li>
+  </ul>
+  <p>Click an account header to collapse/expand it. Click the <strong>&times;</strong> to remove it.</p>
+  <p>Account names matter for the year-by-year table. Accounts whose names start with "Peter" are grouped into a Peter Total column, and accounts starting with "Lisa" into a Lisa Total column.</p>
+
+  <h3>General Settings</h3>
+  <ul>
+    <li><strong>Inflation Rate</strong> — Annual inflation assumption (default: 3%).</li>
+    <li><strong>Monthly Social Security</strong> — Expected Social Security benefit (default: $1,800).</li>
+    <li><strong>Social Security Start Age</strong> — When benefits begin (default: 67).</li>
+    <li><strong>Effective Tax Rate in Retirement</strong> — Applied to pre-tax withdrawals (default: 20%).</li>
+  </ul>
+
+  <h2>Output Panel</h2>
+
+  <h3>Summary Cards</h3>
+  <p>Four cards showing totals at retirement age:</p>
+  <ul>
+    <li><strong>Total at Retirement</strong> — Combined balance across all accounts.</li>
+    <li><strong>Inflation-Adjusted</strong> — That total in today's dollars.</li>
+    <li><strong>Monthly Income (After Tax)</strong> — Estimated monthly income from savings + Social Security.</li>
+    <li><strong>Years of Coverage</strong> — How many years your savings can fund your expenses.</li>
+  </ul>
+
+  <h3>Portfolio Projection Chart</h3>
+  <p>A line chart showing each account's balance and the combined total from now through life expectancy. A dashed red line marks your retirement age. Individual accounts are shown as dashed lines; the total is a solid line.</p>
+
+  <h3>Tax Breakdown</h3>
+  <p>Shows how your retirement savings split across tax treatments and the estimated monthly tax impact on your income.</p>
+
+  <h3>Year-by-Year Table</h3>
+  <p>A scrollable table with the following columns:</p>
+  <ul>
+    <li><strong>Age</strong> — Each row represents the balance on your birthday that year.</li>
+    <li><strong>Peter Total / Lisa Total</strong> — Subtotals for accounts grouped by name prefix.</li>
+    <li><strong>Grand Total</strong> — All accounts combined.</li>
+    <li><strong>Inf Adj Tot</strong> — Grand total expressed in today's dollars.</li>
+    <li><strong>Withdrawals</strong> — The gross amount pulled from accounts that year (includes tax gross-ups — see Appendix).</li>
+    <li><strong>Inf Adj Withdrawals</strong> — Withdrawals expressed in today's dollars.</li>
+  </ul>
+  <p>The retirement year row is highlighted in blue.</p>
+
+  <h2>Saving Your Data</h2>
+  <p>All inputs and accounts are automatically saved to your browser's local storage. Your data persists across page refreshes and browser restarts. To start fresh, clear your browser's local storage for this page.</p>
+
+  <h3>Export / Import</h3>
+  <p>At the bottom of the General Settings section you'll find two buttons:</p>
+  <ul>
+    <li><strong>Export Data</strong> — Downloads a <code>retirement-planner-data.json</code> file containing all your settings and accounts. Use this to back up your data or transfer it to another device or browser.</li>
+    <li><strong>Import Data</strong> — Opens a file picker to load a previously exported JSON file. This replaces all current settings and accounts with the imported data.</li>
+  </ul>
+  <p>Unlike browser storage, exported files won't be lost if you clear your cache or switch browsers. Keep a copy somewhere safe as a backup.</p>
+
+  <h2>Notes</h2>
+  <ul>
+    <li>All calculations use monthly compounding.</li>
+    <li>Post-retirement, withdrawals are drawn proportionally from all accounts.</li>
+    <li>The app runs entirely in your browser — no data is sent anywhere.</li>
+  </ul>
+
+  <hr style="margin-top: 2.5rem;">
+
+  <h1>Appendix: How the Calculations Work</h1>
+
+  <h2>A1. Age and the First Year</h2>
+  <p>Your current age is calculated from your date of birth. The projection starts with your current balances at year 0 (today). The first year of growth only covers the months remaining until your next birthday, not a full 12 months. After that, each year represents a full 12-month period ending on your birthday.</p>
+  <div class="example">
+    <p><strong>Example:</strong> If you're 49 and your birthday is in June, and today is February, the jump from age 49 to 50 only applies ~4 months of growth and contributions.</p>
+  </div>
+
+  <h2>A2. Growth (Accumulation Phase)</h2>
+  <p>Before retirement, each account grows monthly using compound interest plus contributions:</p>
+  <code class="formula">Each month: New Balance = Old Balance &times; (1 + monthly rate) + monthly contribution</code>
+  <p>The monthly rate is your annual return divided by 12. For a 7% annual return, that's about 0.583% per month.</p>
+
+  <h3>Employer Match</h3>
+  <p>For pre-tax accounts with an employer match, the match is added on top of your contribution each month:</p>
+  <ol>
+    <li>Calculate the maximum matchable amount: your monthly salary &times; the match cap percentage</li>
+    <li>Take the lesser of your actual contribution or that cap</li>
+    <li>Multiply by the match percentage to get the employer's contribution</li>
+  </ol>
+  <div class="example">
+    <p><strong>Example:</strong> You earn $100,000/year ($8,333/month), contribute $500/month, employer matches 50% up to 6% of salary.</p>
+    <p>Match cap = $8,333 &times; 6% = $500. Your $500 contribution is within the cap.</p>
+    <p>Employer match = $500 &times; 50% = $250. Total monthly deposit: $750.</p>
+  </div>
+
+  <h2>A3. Withdrawal Strategies</h2>
+  <p>After retirement, the app stops making contributions and starts withdrawing from your accounts. There are three strategies:</p>
+
+  <h3>Fixed Monthly Amount</h3>
+  <p>You specify a dollar amount for monthly expenses. Each year, this amount is increased by the inflation rate to maintain purchasing power.</p>
+  <code class="formula">Monthly need = base expenses &times; (1 + inflation rate)^years &minus; Social Security</code>
+  <div class="example">
+    <p><strong>Example:</strong> $4,000/month expenses with 3% inflation. Year 1: $4,000. Year 10: ~$5,220. Year 20: ~$7,225.</p>
+  </div>
+
+  <h3>4% Rule</h3>
+  <p>The classic safe withdrawal rate. On the day you retire, the app calculates 4% of your total portfolio and divides by 12 to get a monthly withdrawal. Each subsequent year, that dollar amount is adjusted for inflation.</p>
+  <code class="formula">Year 1 monthly withdrawal = (retirement balance &times; 4%) / 12</code>
+  <code class="formula">Later years: that amount &times; (1 + inflation rate)^years in retirement</code>
+  <p>Social Security is subtracted from the need, reducing how much is pulled from savings.</p>
+  <div class="example">
+    <p><strong>Example:</strong> $2,000,000 at retirement. Year 1 withdrawal: $80,000/year ($6,667/month). If Social Security is $1,800/month, only $4,867/month comes from savings.</p>
+  </div>
+
+  <h3>Custom Percentage</h3>
+  <p>You choose an annual withdrawal rate. Each year, the app takes that percentage of the <em>current</em> portfolio balance (not the original). This means withdrawals shrink as the portfolio shrinks, so the money technically never runs out — but the income may become very small.</p>
+  <code class="formula">Monthly withdrawal = (current balance &times; withdrawal %) / 12 &minus; Social Security</code>
+
+  <h2>A4. Tax Gross-Up on Withdrawals</h2>
+  <p>The withdrawal amount you need is your <em>after-tax</em> spending money. But some accounts require you to pull out more than you need because taxes are owed on the withdrawal. This is called "grossing up."</p>
+
+  <h3>Pre-tax accounts (401(k), Traditional IRA)</h3>
+  <p>Every dollar withdrawn is taxed at your effective tax rate. To net the amount you need, you must withdraw more:</p>
+  <code class="formula">Gross withdrawal = net need / (1 &minus; tax rate)</code>
+  <div class="example">
+    <p><strong>Example:</strong> You need $1,000 from a pre-tax account and your tax rate is 20%.</p>
+    <p>Gross withdrawal = $1,000 / (1 &minus; 0.20) = $1,250. You pull $1,250, pay $250 in tax, and keep $1,000.</p>
+  </div>
+
+  <h3>Roth / Post-tax accounts (Roth IRA, HSA)</h3>
+  <p>Withdrawals are tax-free. No gross-up needed — you withdraw exactly what you need.</p>
+
+  <h3>Taxable accounts (Brokerage)</h3>
+  <p>The app estimates that roughly 50% of each withdrawal is capital gains, taxed at 15%:</p>
+  <code class="formula">Gross withdrawal = net need / (1 &minus; 50% &times; 15%)</code>
+  <div class="example">
+    <p><strong>Example:</strong> You need $1,000 from a brokerage account.</p>
+    <p>Gross withdrawal = $1,000 / (1 &minus; 0.075) = $1,081. The extra $81 covers estimated capital gains tax.</p>
+  </div>
+
+  <h3>Why "Withdrawals" in the table may look higher than expected</h3>
+  <p>The Withdrawals column shows the <strong>gross</strong> amount pulled from all accounts — the actual dollars leaving your portfolio. This is higher than your spending need because it includes the extra pulled to cover taxes. The difference depends on your mix of pre-tax, Roth, and taxable accounts.</p>
+
+  <h2>A5. Proportional Withdrawals</h2>
+  <p>When you have multiple accounts, the app doesn't drain one before moving to the next. Instead, it withdraws from each account in proportion to its current balance.</p>
+  <div class="example">
+    <p><strong>Example:</strong> You have $600,000 in a 401(k) and $400,000 in a Roth IRA (60/40 split). If you need $5,000/month, roughly $3,000 comes from the 401(k) and $2,000 from the Roth — before tax gross-up.</p>
+  </div>
+
+  <h2>A6. Inflation Adjustment</h2>
+  <p>Inflation means a dollar tomorrow buys less than a dollar today. The "Inf Adj" columns translate future dollar amounts into today's purchasing power so you can compare apples to apples.</p>
+  <code class="formula">Inflation-adjusted value = future value / (1 + inflation rate)^years from now</code>
+  <div class="example">
+    <p><strong>Example:</strong> You'll have $1,000,000 in 20 years. With 3% inflation:</p>
+    <p>Adjusted = $1,000,000 / (1.03)^20 = ~$553,676</p>
+    <p>That means your future $1M will buy about what $554K buys today.</p>
+  </div>
+
+  <h2>A7. Social Security</h2>
+  <p>Social Security income is subtracted from your monthly spending need, reducing how much you pull from savings. It only kicks in at your specified start age (default: 67). Before that age, your savings cover the full amount.</p>
+  <p>Social Security is not inflation-adjusted in this model — it's treated as a fixed monthly dollar amount.</p>
+
+  <h2>A8. Portfolio Growth During Retirement</h2>
+  <p>Your accounts continue to earn returns during retirement at the same annual rate you set for each account. Each month, the balance grows by the monthly rate before the withdrawal is subtracted:</p>
+  <code class="formula">Each month: New Balance = Old Balance &times; (1 + monthly rate) &minus; monthly withdrawal</code>
+  <p>This means your portfolio can continue growing even during retirement if returns exceed withdrawals.</p>
+
+</body>
+</html>

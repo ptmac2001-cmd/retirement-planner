@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retirement Planner</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Retirement Planner</h1>
+    <p class="subtitle">Plan your financial future with confidence</p>
+  </header>
+
+  <main class="app-layout">
+    <!-- INPUT PANEL -->
+    <section class="input-panel">
+
+      <div class="panel-section">
+        <h2>Personal Info</h2>
+        <div class="form-grid">
+          <label>
+            <span>Date of Birth</span>
+            <input type="date" id="birthdate" value="1976-06-15">
+          </label>
+          <label>
+            <span>Retirement Age</span>
+            <input type="number" id="retirementAge" value="65" min="18" max="100">
+          </label>
+          <label>
+            <span>Life Expectancy</span>
+            <input type="number" id="lifeExpectancy" value="90" min="50" max="120">
+          </label>
+          <label>
+            <span>Annual Income</span>
+            <div class="input-prefix">
+              <span class="prefix">$</span>
+              <input type="number" id="annualIncome" value="75000" min="0" step="1000">
+            </div>
+          </label>
+          <label>
+            <span>Withdrawal Strategy</span>
+            <select id="withdrawalStrategy">
+              <option value="fixed">Fixed Monthly Amount</option>
+              <option value="4pct">4% Rule</option>
+              <option value="pct">Custom % of Balance</option>
+            </select>
+          </label>
+          <label id="expensesLabel">
+            <span>Monthly Expenses in Retirement</span>
+            <div class="input-prefix">
+              <span class="prefix">$</span>
+              <input type="number" id="monthlyExpenses" value="4000" min="0" step="100">
+            </div>
+          </label>
+          <label id="withdrawalPctLabel" style="display:none">
+            <span>Annual Withdrawal Rate (%)</span>
+            <input type="number" id="withdrawalPct" value="4" min="0" max="20" step="0.1">
+          </label>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>Retirement Accounts</h2>
+        <div id="accountsList"></div>
+        <div class="add-account-row">
+          <select id="accountTemplate">
+            <option value="401k">401(k)</option>
+            <option value="rothIra">Roth IRA</option>
+            <option value="traditionalIra">Traditional IRA</option>
+            <option value="brokerage">Brokerage</option>
+            <option value="hsa">HSA</option>
+            <option value="custom">Custom Account</option>
+          </select>
+          <button id="addAccountBtn" class="btn btn-primary">+ Add Account</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>General Settings</h2>
+        <div class="form-grid">
+          <label>
+            <span>Inflation Rate (%)</span>
+            <input type="number" id="inflationRate" value="3" min="0" max="15" step="0.1">
+          </label>
+          <label>
+            <span>Monthly Social Security</span>
+            <div class="input-prefix">
+              <span class="prefix">$</span>
+              <input type="number" id="socialSecurity" value="1800" min="0" step="50">
+            </div>
+          </label>
+          <label>
+            <span>Social Security Start Age</span>
+            <input type="number" id="ssStartAge" value="67" min="62" max="70">
+          </label>
+          <label>
+            <span>Effective Tax Rate in Retirement (%)</span>
+            <input type="number" id="taxRate" value="20" min="0" max="50" step="0.5">
+          </label>
+        </div>
+        <div class="export-import-row">
+          <button id="exportBtn" class="btn btn-secondary">Export Data</button>
+          <button id="importBtn" class="btn btn-secondary">Import Data</button>
+          <input type="file" id="importFile" accept=".json" style="display:none">
+        </div>
+      </div>
+
+    </section>
+
+    <!-- OUTPUT PANEL -->
+    <section class="output-panel">
+
+      <div class="summary-cards" id="summaryCards">
+        <div class="summary-card">
+          <span class="card-label">Total at Retirement</span>
+          <span class="card-value" id="totalAtRetirement">$0</span>
+        </div>
+        <div class="summary-card">
+          <span class="card-label">Inflation-Adjusted</span>
+          <span class="card-value" id="inflationAdjusted">$0</span>
+        </div>
+        <div class="summary-card">
+          <span class="card-label">Monthly Income (After Tax)</span>
+          <span class="card-value" id="monthlyIncome">$0</span>
+        </div>
+        <div class="summary-card">
+          <span class="card-label">Years of Coverage</span>
+          <span class="card-value" id="yearsCoverage">0</span>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>Portfolio Projection</h2>
+        <div class="chart-container">
+          <canvas id="projectionChart"></canvas>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h2>Tax Breakdown at Retirement</h2>
+        <div id="taxSummary" class="tax-summary"></div>
+      </div>
+
+      <div class="panel-section">
+        <h2>Year-by-Year Breakdown</h2>
+        <div class="table-wrapper">
+          <table id="yearTable">
+            <thead>
+              <tr id="tableHeader"></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Account card template -->
+  <template id="accountTemplate-tpl">
+    <div class="account-card" data-id="">
+      <div class="account-header">
+        <button class="collapse-toggle" aria-label="Toggle account details">&#9660;</button>
+        <span class="account-name-display"></span>
+        <span class="tax-badge"></span>
+        <button class="remove-btn" aria-label="Remove account">&times;</button>
+      </div>
+      <div class="account-body">
+        <div class="form-grid">
+          <label>
+            <span>Account Name</span>
+            <input type="text" class="acc-name" placeholder="Account name">
+          </label>
+          <label>
+            <span>Tax Treatment</span>
+            <select class="acc-tax">
+              <option value="pretax">Pre-tax</option>
+              <option value="roth">Post-tax / Roth</option>
+              <option value="taxable">Taxable</option>
+            </select>
+          </label>
+          <label>
+            <span>Current Balance</span>
+            <div class="input-prefix">
+              <span class="prefix">$</span>
+              <input type="number" class="acc-balance" value="0" min="0" step="100">
+            </div>
+          </label>
+          <label>
+            <span>Monthly Contribution</span>
+            <div class="input-prefix">
+              <span class="prefix">$</span>
+              <input type="number" class="acc-contribution" value="500" min="0" step="50">
+            </div>
+          </label>
+          <label class="employer-match-field">
+            <span>Employer Match (%)</span>
+            <input type="number" class="acc-match-pct" value="0" min="0" max="100" step="0.5">
+          </label>
+          <label class="employer-match-field">
+            <span>Match Cap (% of salary)</span>
+            <input type="number" class="acc-match-cap" value="0" min="0" max="100" step="0.5">
+          </label>
+          <label>
+            <span>Annual Return (%)</span>
+            <input type="number" class="acc-return" value="7" min="0" max="30" step="0.1">
+          </label>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>
