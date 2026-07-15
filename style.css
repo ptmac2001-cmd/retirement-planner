@@ -44,33 +44,6 @@ header h1 {
   margin-top: 0.25rem;
 }
 
-.header-nav {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  margin-top: 0.75rem;
-}
-
-.header-nav a {
-  color: rgba(255,255,255,0.75);
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.header-nav a:hover {
-  color: #fff;
-  background: rgba(255,255,255,0.15);
-}
-
-.header-nav a.active {
-  color: #fff;
-  background: rgba(255,255,255,0.2);
-}
-
 /* Layout */
 .app-layout {
   display: flex;
