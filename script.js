@@ -467,8 +467,8 @@
     datasets.push({
       label: "Total",
       data: data.map((d) => Math.max(d.total, 0)),
-      borderColor: "#fafafa",
-      backgroundColor: "rgba(250,250,250,0.06)",
+      borderColor: "#18181b",
+      backgroundColor: "rgba(24,24,27,0.06)",
       borderWidth: 2.5,
       pointRadius: 0,
       fill: false,
@@ -504,7 +504,7 @@
           legend: {
             align: "center",
             labels: {
-              color: "#d4d4d8",
+              color: "#3f3f46",
               generateLabels(chartInstance) {
                 const defaultLabels = Chart.defaults.plugins.legend.labels.generateLabels(chartInstance);
                 return defaultLabels.map((label) => {
@@ -523,17 +523,17 @@
         },
         scales: {
           x: {
-            title: { display: true, text: "Age", color: "#a1a1aa" },
-            ticks: { maxTicksLimit: 15, color: "#a1a1aa" },
-            grid: { color: "rgba(255,255,255,0.06)" },
+            title: { display: true, text: "Age", color: "#71717a" },
+            ticks: { maxTicksLimit: 15, color: "#71717a" },
+            grid: { color: "rgba(9,9,11,0.06)" },
           },
           y: {
-            title: { display: true, text: "Portfolio Value", color: "#a1a1aa" },
+            title: { display: true, text: "Portfolio Value", color: "#71717a" },
             ticks: {
               callback: (v) => fmt(v),
-              color: "#a1a1aa",
+              color: "#71717a",
             },
-            grid: { color: "rgba(255,255,255,0.06)" },
+            grid: { color: "rgba(9,9,11,0.06)" },
             min: 0,
           },
         },

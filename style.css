@@ -5,39 +5,40 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* Zinc-based dark neutrals (no pure black) */
-  --zinc-950: #09090b;
-  --zinc-900: #18181b;
-  --zinc-800: #27272a;
-  --zinc-700: #3f3f46;
-  --zinc-400: #a1a1aa;
-  --zinc-300: #d4d4d8;
-  --zinc-100: #f4f4f5;
+  /* Zinc-based light neutrals */
   --zinc-50:  #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-900: #18181b;
 
-  /* Semantic tokens (shadcn-inspired) */
-  --clr-bg: var(--zinc-950);
-  --clr-surface: rgba(24, 24, 27, 0.6);   /* zinc-900 @ 60% for frosted glass */
-  --clr-surface-solid: var(--zinc-900);
-  --clr-elevated: rgba(39, 39, 42, 0.55);
+  /* Semantic tokens (shadcn-inspired, light) */
+  --clr-bg: var(--zinc-50);
+  --clr-surface: rgba(255, 255, 255, 0.72);   /* frosted glass */
+  --clr-surface-solid: #ffffff;
+  --clr-elevated: rgba(255, 255, 255, 0.8);
   --clr-primary: #6366f1;
   --clr-primary-hover: #4f46e5;
-  --clr-text: var(--zinc-50);
-  --clr-text-muted: var(--zinc-400);
-  --clr-border: rgba(255, 255, 255, 0.08);
-  --clr-border-strong: rgba(255, 255, 255, 0.14);
-  --clr-ring: rgba(99, 102, 241, 0.45);
+  --clr-text: var(--zinc-900);
+  --clr-text-muted: var(--zinc-500);
+  --clr-border: rgba(9, 9, 11, 0.09);
+  --clr-border-strong: rgba(9, 9, 11, 0.14);
+  --clr-ring: rgba(99, 102, 241, 0.35);
 
-  --clr-pretax: #f59e0b;
-  --clr-roth: #10b981;
-  --clr-taxable: #818cf8;
+  --clr-pretax: #d97706;
+  --clr-roth: #059669;
+  --clr-taxable: #4f46e5;
 
   --radius: 14px;
   --radius-sm: 9px;
   --blur: blur(14px);
-  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+  --shadow: 0 1px 2px rgba(9, 9, 11, 0.04), 0 12px 28px -16px rgba(9, 9, 11, 0.22);
 }
 
 body {
@@ -46,10 +47,10 @@ body {
   color: var(--clr-text);
   line-height: 1.5;
   min-height: 100vh;
-  /* Subtle glows so the frosted-glass blur has something to work against */
+  /* Soft tinted glows so the frosted-glass blur reads on light */
   background-image:
-    radial-gradient(60rem 40rem at 12% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(50rem 40rem at 110% 10%, rgba(16, 185, 129, 0.10), transparent 55%),
+    radial-gradient(60rem 40rem at 12% -10%, rgba(99, 102, 241, 0.12), transparent 60%),
+    radial-gradient(50rem 40rem at 110% 8%, rgba(16, 185, 129, 0.09), transparent 55%),
     radial-gradient(40rem 30rem at 50% 120%, rgba(129, 140, 248, 0.10), transparent 60%);
   background-attachment: fixed;
 }
@@ -58,7 +59,7 @@ header {
   padding: 1.75rem 2rem 1.5rem;
   text-align: center;
   border-bottom: 1px solid var(--clr-border);
-  background: rgba(9, 9, 11, 0.5);
+  background: rgba(255, 255, 255, 0.6);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   position: sticky;
@@ -70,7 +71,7 @@ header h1 {
   font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  background: linear-gradient(180deg, var(--zinc-50), var(--zinc-400));
+  background: linear-gradient(180deg, var(--zinc-900), var(--zinc-600));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -148,16 +149,16 @@ header h1 {
   width: 100%;
   min-width: 0;
   padding: 0.5rem 0.65rem;
-  border: 1px solid var(--clr-border);
+  border: 1px solid var(--clr-border-strong);
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
   color: var(--clr-text);
-  background: rgba(9, 9, 11, 0.5);
+  background: rgba(255, 255, 255, 0.85);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .form-grid input::placeholder {
-  color: var(--zinc-700);
+  color: var(--zinc-400);
 }
 
 .form-grid input:focus,
@@ -170,13 +171,13 @@ header h1 {
 .input-prefix {
   display: flex;
   align-items: center;
-  border: 1px solid var(--clr-border);
+  border: 1px solid var(--clr-border-strong);
   border-radius: var(--radius-sm);
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
   min-width: 0;
   width: 100%;
-  background: rgba(9, 9, 11, 0.5);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .input-prefix:focus-within {
@@ -186,7 +187,7 @@ header h1 {
 
 .input-prefix .prefix {
   padding: 0.5rem 0.55rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(9, 9, 11, 0.03);
   color: var(--clr-text-muted);
   font-size: 0.9rem;
   font-weight: 500;
@@ -223,7 +224,7 @@ header h1 {
 .btn-primary {
   background: var(--clr-primary);
   color: #fff;
-  box-shadow: 0 6px 20px -8px rgba(99, 102, 241, 0.7);
+  box-shadow: 0 8px 20px -10px rgba(99, 102, 241, 0.65);
 }
 
 .btn-primary:hover {
@@ -231,13 +232,13 @@ header h1 {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.9);
   color: var(--clr-text);
   border: 1px solid var(--clr-border-strong);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--zinc-100);
 }
 
 .export-import-row {
@@ -257,11 +258,11 @@ header h1 {
 .add-account-row select {
   flex: 1;
   padding: 0.55rem;
-  border: 1px solid var(--clr-border);
+  border: 1px solid var(--clr-border-strong);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   color: var(--clr-text);
-  background: rgba(9, 9, 11, 0.5);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 /* Account Cards */
@@ -271,7 +272,7 @@ header h1 {
   margin-bottom: 0.75rem;
   overflow: hidden;
   min-width: 0;
-  background: rgba(9, 9, 11, 0.35);
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .account-header {
@@ -279,12 +280,12 @@ header h1 {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 0.8rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(9, 9, 11, 0.025);
   cursor: pointer;
 }
 
 .account-header:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(9, 9, 11, 0.05);
 }
 
 .collapse-toggle {
@@ -320,21 +321,21 @@ header h1 {
 }
 
 .tax-badge.pretax {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fcd34d;
-  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.3);
 }
 
 .tax-badge.roth {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
-  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.3);
 }
 
 .tax-badge.taxable {
-  background: rgba(129, 140, 248, 0.15);
-  color: #c7d2fe;
-  border-color: rgba(129, 140, 248, 0.35);
+  background: rgba(79, 70, 229, 0.1);
+  color: #4338ca;
+  border-color: rgba(79, 70, 229, 0.28);
 }
 
 .remove-btn {
@@ -349,7 +350,7 @@ header h1 {
 }
 
 .remove-btn:hover {
-  color: #f87171;
+  color: #dc2626;
 }
 
 .account-body {
@@ -402,8 +403,8 @@ header h1 {
   grid-row: span 2;
   justify-content: flex-end;
   background:
-    radial-gradient(120% 120% at 0% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
-    var(--clr-elevated);
+    radial-gradient(120% 120% at 0% 0%, rgba(99, 102, 241, 0.14), transparent 55%),
+    var(--clr-surface-solid);
   border-color: var(--clr-border-strong);
 }
 
@@ -431,7 +432,7 @@ header h1 {
 .summary-card:nth-child(1) .card-value {
   font-size: 2.6rem;
   line-height: 1.05;
-  background: linear-gradient(180deg, var(--zinc-50), #a5b4fc);
+  background: linear-gradient(180deg, var(--zinc-900), #4f46e5);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -454,7 +455,7 @@ header h1 {
   padding: 0.85rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--clr-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(9, 9, 11, 0.015);
 }
 
 .tax-group h3 {
@@ -480,8 +481,8 @@ header h1 {
 
 .tax-impact {
   grid-column: 1 / -1;
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.07);
+  border-color: rgba(99, 102, 241, 0.25);
 }
 
 /* Table */
@@ -510,7 +511,7 @@ header h1 {
 #yearTable th {
   position: sticky;
   top: 0;
-  background: var(--zinc-900);
+  background: var(--zinc-100);
   font-weight: 600;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -519,7 +520,7 @@ header h1 {
 }
 
 #yearTable tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(9, 9, 11, 0.025);
 }
 
 #yearTable th:first-child,
@@ -528,7 +529,7 @@ header h1 {
 }
 
 #yearTable tr.retirement-row {
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(99, 102, 241, 0.09);
   font-weight: 600;
 }
 
@@ -537,14 +538,14 @@ header h1 {
   border-bottom: 2px solid var(--clr-primary);
 }
 
-/* Custom scrollbars for the dark theme */
+/* Custom scrollbars */
 .table-wrapper::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 .table-wrapper::-webkit-scrollbar-thumb {
-  background: var(--zinc-700);
+  background: var(--zinc-300);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
