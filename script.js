@@ -3,13 +3,15 @@
 
   // ── Account presets ──
   const PRESETS = {
-    "401k":           { name: "401(k)",          tax: "pretax",  contribution: 500, matchPct: 50, matchCap: 6 },
-    rothIra:          { name: "Roth IRA",        tax: "roth",    contribution: 500, matchPct: 0,  matchCap: 0 },
-    traditionalIra:   { name: "Traditional IRA", tax: "pretax",  contribution: 400, matchPct: 0,  matchCap: 0 },
-    brokerage:        { name: "Brokerage",       tax: "taxable", contribution: 300, matchPct: 0,  matchCap: 0 },
-    hsa:              { name: "HSA",             tax: "roth",    contribution: 200, matchPct: 0,  matchCap: 0 },
-    custom:           { name: "Custom Account",  tax: "taxable", contribution: 200, matchPct: 0,  matchCap: 0 },
+    "401k":           { name: "401(k)",          tax: "pretax",  contribution: 500, matchPct: 50, matchCap: 6, volatility: 15 },
+    rothIra:          { name: "Roth IRA",        tax: "roth",    contribution: 500, matchPct: 0,  matchCap: 0, volatility: 15 },
+    traditionalIra:   { name: "Traditional IRA", tax: "pretax",  contribution: 400, matchPct: 0,  matchCap: 0, volatility: 15 },
+    brokerage:        { name: "Brokerage",       tax: "taxable", contribution: 300, matchPct: 0,  matchCap: 0, volatility: 15 },
+    hsa:              { name: "HSA",             tax: "roth",    contribution: 200, matchPct: 0,  matchCap: 0, volatility: 10 },
+    custom:           { name: "Custom Account",  tax: "taxable", contribution: 200, matchPct: 0,  matchCap: 0, volatility: 12 },
   };
+
+  const DEFAULT_VOLATILITY = 15;
 
   const ACCOUNT_COLORS = [
     "#2563eb", "#10b981", "#f59e0b", "#6366f1",
@@ -19,6 +21,11 @@
   let accounts = [];
   let nextId = 1;
   let chart = null;
+
+  // Latest Monte Carlo results ({ bands, successRate, ... }) plus run state
+  let mcResults = null;
+  let mcRunToken = 0;
+  let mcRunning = false;
 
   // ── DOM refs ──
   const $ = (s) => document.querySelector(s);
@@ -38,6 +45,21 @@
     socialSecurity: $("#socialSecurity"),
     ssStartAge:     $("#ssStartAge"),
     taxRate:        $("#taxRate"),
+    assetCorrelation: $("#assetCorrelation"),
+    mcTrials:       $("#mcTrials"),
+    runMcBtn:       $("#runMcBtn"),
+    mcProgress:     $("#mcProgress"),
+    mcProgressBar:  $("#mcProgressBar"),
+    mcEmpty:        $("#mcEmpty"),
+    mcStale:        $("#mcStale"),
+    mcResultsBox:   $("#mcResults"),
+    mcSuccessRate:  $("#mcSuccessRate"),
+    mcSuccessNote:  $("#mcSuccessNote"),
+    mcMedianEnd:    $("#mcMedianEnd"),
+    mcP10End:       $("#mcP10End"),
+    mcP10Note:      $("#mcP10Note"),
+    mcDepletionAge: $("#mcDepletionAge"),
+    mcDepletionNote:$("#mcDepletionNote"),
     accountsList:   $("#accountsList"),
     addBtn:         $("#addAccountBtn"),
     templateSelect: $("#accountTemplate"),
@@ -102,7 +124,16 @@
     "annualIncome", "withdrawalStrategy", "monthlyExpenses",
     "withdrawalPct", "inflationRate",
     "socialSecurity", "ssStartAge", "taxRate",
+    "assetCorrelation", "mcTrials",
   ];
+
+  // Fills in fields added after a save was written, so old saves/exports still load.
+  function normalizeAccount(acc) {
+    if (typeof acc.volatility !== "number" || !isFinite(acc.volatility)) {
+      acc.volatility = DEFAULT_VOLATILITY;
+    }
+    return acc;
+  }
 
   function updateStrategyVisibility() {
     const strategy = el.withdrawalStrategy.value;
@@ -152,7 +183,7 @@
       if (state.accounts && state.accounts.length > 0) {
         nextId = state.nextId || 1;
         state.accounts.forEach((acc) => {
-          accounts.push(acc);
+          accounts.push(normalizeAccount(acc));
           renderAccount(acc);
         });
         return true;
@@ -174,6 +205,7 @@
       matchPct: preset.matchPct,
       matchCap: preset.matchCap,
       annualReturn: 7,
+      volatility: preset.volatility,
     };
     accounts.push(acc);
     renderAccount(acc);
@@ -202,6 +234,7 @@
     card.querySelector(".acc-match-pct").value = acc.matchPct;
     card.querySelector(".acc-match-cap").value = acc.matchCap;
     card.querySelector(".acc-return").value = acc.annualReturn;
+    card.querySelector(".acc-volatility").value = acc.volatility;
 
     updateBadge(card, acc.tax);
     updateMatchVisibility(card, acc.tax);
@@ -240,6 +273,7 @@
     acc.matchPct = getVal(card.querySelector(".acc-match-pct"));
     acc.matchCap = getVal(card.querySelector(".acc-match-cap"));
     acc.annualReturn = getVal(card.querySelector(".acc-return"));
+    acc.volatility = getVal(card.querySelector(".acc-volatility"));
 
     card.querySelector(".account-name-display").textContent = acc.name;
     updateBadge(card, acc.tax);
@@ -263,57 +297,74 @@
   }
 
   // ── Calculation Engine ──
-  function recalculate() {
+  // Reads every input into a plain snapshot. Returns null when the inputs are
+  // not yet coherent (the same guard the old recalculate() used).
+  function readConfig() {
     const currentAge = getAgeFromBirthdate();
     const retireAge = getVal(el.retirementAge);
     const lifeExp = getVal(el.lifeExpectancy);
-    const annualIncome = getVal(el.annualIncome);
-    const strategy = el.withdrawalStrategy.value;
-    const monthlyExpenses = getVal(el.monthlyExpenses);
-    const withdrawalPct = getVal(el.withdrawalPct) / 100;
-    const inflationPct = getVal(el.inflationRate) / 100;
-    const ssMonthly = getVal(el.socialSecurity);
-    const ssStartAge = getVal(el.ssStartAge);
-    const taxRatePct = getVal(el.taxRate) / 100;
 
-    if (currentAge <= 0 || currentAge >= lifeExp || currentAge >= retireAge) {
-      clearOutputs();
-      return;
-    }
+    if (currentAge <= 0 || currentAge >= lifeExp || currentAge >= retireAge) return null;
 
-    const totalYears = lifeExp - currentAge;
-    const yearsToRetire = retireAge - currentAge;
-    const firstYearMonths = getMonthsToNextBirthday();
+    return {
+      currentAge,
+      retireAge,
+      lifeExp,
+      annualIncome: getVal(el.annualIncome),
+      strategy: el.withdrawalStrategy.value,
+      monthlyExpenses: getVal(el.monthlyExpenses),
+      withdrawalPct: getVal(el.withdrawalPct) / 100,
+      inflationPct: getVal(el.inflationRate) / 100,
+      ssMonthly: getVal(el.socialSecurity),
+      ssStartAge: getVal(el.ssStartAge),
+      taxRatePct: getVal(el.taxRate) / 100,
+      correlation: Math.min(Math.max(getVal(el.assetCorrelation) / 100, 0), 1),
+      totalYears: lifeExp - currentAge,
+      yearsToRetire: retireAge - currentAge,
+      firstYearMonths: getMonthsToNextBirthday(),
+      // Snapshot so a long simulation is not disturbed by edits mid-run
+      accounts: accounts.map((a) => ({ ...a })),
+    };
+  }
 
-    // Per-account yearly data
-    // Each entry: { age, balances: { [accId]: number }, total, inflAdj }
-    const yearlyData = [];
+  // Runs one full projection path.
+  //   opts.draw — (accountIndex, year) => annual growth multiplier. Omit for the
+  //               deterministic projection, which uses each account's fixed return.
+  //   opts.lean — skip the per-year detail rows (Monte Carlo only needs totals).
+  // Returns { yearlyData, totals, depletionAge }.
+  function runProjection(cfg, opts) {
+    const draw = opts && opts.draw;
+    const lean = !!(opts && opts.lean);
+    const accs = cfg.accounts;
 
-    // Initialize balances
+    const yearlyData = lean ? null : [];
+    const totals = new Float64Array(cfg.totalYears + 1);
+    let depletionAge = null;
+
     const balances = {};
     let retirementBalance = 0;
-    accounts.forEach((a) => { balances[a.id] = a.balance; });
+    accs.forEach((a) => { balances[a.id] = a.balance; });
 
-    for (let y = 0; y <= totalYears; y++) {
-      const age = currentAge + y;
+    for (let y = 0; y <= cfg.totalYears; y++) {
+      const age = cfg.currentAge + y;
       // Year 1 = partial year (months until next birthday), all others = 12 months
-      const monthsThisYear = y === 1 ? firstYearMonths : 12;
+      const monthsThisYear = y === 1 ? cfg.firstYearMonths : 12;
 
       let yearWithdrawal = 0;
 
       // Year 0 = current age: record starting balances, no growth yet
       if (y > 0) {
-        const isRetired = age > retireAge;
+        const isRetired = age > cfg.retireAge;
 
         if (!isRetired) {
           // Accumulation phase: monthly compounding for this year
-          accounts.forEach((acc) => {
-            const monthlyRate = (acc.annualReturn / 100) / 12;
+          accs.forEach((acc, ai) => {
+            const monthlyRate = monthlyRateFor(acc, ai, y, draw);
             let monthlyContrib = acc.contribution;
 
             // Employer match
             if (acc.tax === "pretax" && acc.matchPct > 0 && acc.matchCap > 0) {
-              const monthlySalary = annualIncome / 12;
+              const monthlySalary = cfg.annualIncome / 12;
               const maxMatchBase = monthlySalary * (acc.matchCap / 100);
               const employeeContribForMatch = Math.min(monthlyContrib, maxMatchBase);
               const match = employeeContribForMatch * (acc.matchPct / 100);
@@ -326,39 +377,39 @@
           });
         } else {
           // Drawdown phase
-          const ssActive = age >= ssStartAge;
-          const ssContrib = ssActive ? ssMonthly : 0;
+          const ssActive = age >= cfg.ssStartAge;
+          const ssContrib = ssActive ? cfg.ssMonthly : 0;
 
           // Determine monthly withdrawal based on strategy
           let monthlyNeed;
-          if (strategy === "4pct") {
+          if (cfg.strategy === "4pct") {
             // 4% rule: 4% of retirement balance, inflation-adjusted from retirement year
             if (!retirementBalance) {
-              retirementBalance = accounts.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
+              retirementBalance = accs.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
             }
-            const yearsInRetirement = age - retireAge;
-            const inflFactor = Math.pow(1 + inflationPct, yearsInRetirement);
+            const yearsInRetirement = age - cfg.retireAge;
+            const inflFactor = Math.pow(1 + cfg.inflationPct, yearsInRetirement);
             monthlyNeed = (retirementBalance * 0.04 / 12) * inflFactor - ssContrib;
-          } else if (strategy === "pct") {
+          } else if (cfg.strategy === "pct") {
             // Custom %: percentage of current portfolio balance each year
-            const totalBal = accounts.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
-            monthlyNeed = (totalBal * withdrawalPct / 12) - ssContrib;
+            const totalBal = accs.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
+            monthlyNeed = (totalBal * cfg.withdrawalPct / 12) - ssContrib;
           } else {
             // Fixed: inflation-adjusted monthly expenses
-            const inflationFactor = Math.pow(1 + inflationPct, y);
-            monthlyNeed = monthlyExpenses * inflationFactor - ssContrib;
+            const inflationFactor = Math.pow(1 + cfg.inflationPct, y);
+            monthlyNeed = cfg.monthlyExpenses * inflationFactor - ssContrib;
           }
           if (monthlyNeed < 0) monthlyNeed = 0;
 
-          const totalBal = accounts.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
+          const totalBal = accs.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
 
-          accounts.forEach((acc) => {
-            const monthlyRate = (acc.annualReturn / 100) / 12;
+          accs.forEach((acc, ai) => {
+            const monthlyRate = monthlyRateFor(acc, ai, y, draw);
             const proportion = totalBal > 0 ? Math.max(balances[acc.id], 0) / totalBal : 0;
 
             let rawWithdrawal = monthlyNeed * proportion;
             if (acc.tax === "pretax") {
-              rawWithdrawal = rawWithdrawal / (1 - taxRatePct);
+              rawWithdrawal = rawWithdrawal / (1 - cfg.taxRatePct);
             } else if (acc.tax === "taxable") {
               rawWithdrawal = rawWithdrawal / (1 - 0.5 * 0.15);
             }
@@ -371,19 +422,63 @@
             }
           });
         }
+
+        // "Ran out of money" is only meaningful once withdrawals have started
+        if (isRetired && depletionAge === null) {
+          const remaining = accs.reduce((s, a) => s + balances[a.id], 0);
+          if (remaining <= 0) depletionAge = age;
+        }
       }
 
-      const inflationFactor = Math.pow(1 + inflationPct, y);
-      const total = accounts.reduce((s, a) => s + balances[a.id], 0);
-      yearlyData.push({
-        age,
-        balances: { ...balances },
-        total,
-        inflAdj: total / inflationFactor,
-        withdrawal: yearWithdrawal,
-        inflFactor: inflationFactor,
-      });
+      const inflationFactor = Math.pow(1 + cfg.inflationPct, y);
+      const total = accs.reduce((s, a) => s + balances[a.id], 0);
+      totals[y] = total;
+
+      if (!lean) {
+        yearlyData.push({
+          age,
+          balances: { ...balances },
+          total,
+          inflAdj: total / inflationFactor,
+          withdrawal: yearWithdrawal,
+          inflFactor: inflationFactor,
+        });
+      }
     }
+
+    return { yearlyData, totals, depletionAge };
+  }
+
+  function monthlyRateFor(acc, accountIndex, year, draw) {
+    if (!draw) return (acc.annualReturn / 100) / 12;
+    // Spread the year's realized growth geometrically across its months, so the
+    // realized annual growth is exactly the drawn multiplier — no compounding bias
+    // on top of the draw.
+    return Math.pow(draw(accountIndex, year), 1 / 12) - 1;
+  }
+
+  // The deterministic engine treats the annual return as a nominal rate divided by 12
+  // and compounded monthly, so 7% actually grows a balance by 7.23% a year. The
+  // simulation draws around that same effective figure rather than the nominal one.
+  // That keeps the two models consistent: at 0% volatility every simulated path lands
+  // exactly on the deterministic projection.
+  function effectiveAnnualReturn(acc) {
+    return Math.pow(1 + (acc.annualReturn / 100) / 12, 12) - 1;
+  }
+
+  function recalculate() {
+    const cfg = readConfig();
+    if (!cfg) {
+      clearOutputs();
+      return;
+    }
+
+    const { retireAge, lifeExp, ssMonthly, ssStartAge, taxRatePct, yearsToRetire } = cfg;
+
+    const { yearlyData } = runProjection(cfg);
+
+    // Monte Carlo results describe the inputs as they were when it ran
+    markMonteCarloStale(cfg);
 
     // ── Summaries ──
     const retireIdx = yearsToRetire;
@@ -436,6 +531,225 @@
     return monthlyIncome;
   }
 
+  // ── Monte Carlo ──
+  // Fixed seed: re-running with unchanged inputs gives the same answer instead of
+  // a success rate that wobbles a point every click.
+  const MC_SEED = 0x9e3779b9;
+  const MC_BATCH = 200;
+
+  // mulberry32 + Box–Muller. Small, seedable, and plenty for this.
+  function makeRng(seed) {
+    let s = seed >>> 0;
+    let spare = null;
+
+    function next() {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+
+    return {
+      normal() {
+        if (spare !== null) {
+          const v = spare;
+          spare = null;
+          return v;
+        }
+        let u = 0, v = 0;
+        while (u === 0) u = next();
+        while (v === 0) v = next();
+        const mag = Math.sqrt(-2 * Math.log(u));
+        spare = mag * Math.sin(2 * Math.PI * v);
+        return mag * Math.cos(2 * Math.PI * v);
+      },
+    };
+  }
+
+  // One year's growth multiplier, drawn lognormally so a bad year can never drive a
+  // balance below zero the way a raw normal draw would allow. Moment-matched: the
+  // draw's mean is 1 + the account's expected return and its std dev is the
+  // account's volatility.
+  function lognormalGrowth(mu, sigma, z) {
+    const mean = 1 + mu;
+    if (sigma <= 0 || mean <= 0) return Math.max(mean, 0);
+    const varLog = Math.log(1 + (sigma * sigma) / (mean * mean));
+    return Math.exp(Math.log(mean) - varLog / 2 + Math.sqrt(varLog) * z);
+  }
+
+  // Correlated draws: one market factor shared by every account each year, plus an
+  // account-specific shock. Weighting by sqrt(rho)/sqrt(1-rho) makes the pairwise
+  // correlation between any two accounts exactly rho. Drawing each account
+  // independently instead would hand the portfolio free diversification and
+  // overstate the success rate.
+  function makeDraw(cfg, rng) {
+    const wMarket = Math.sqrt(cfg.correlation);
+    const wIdio = Math.sqrt(1 - cfg.correlation);
+    let cachedYear = -1;
+    let cachedGrowth = [];
+
+    return function (accountIndex, year) {
+      if (year !== cachedYear) {
+        const zMarket = rng.normal();
+        cachedGrowth = cfg.accounts.map((acc) => {
+          const z = wMarket * zMarket + wIdio * rng.normal();
+          return lognormalGrowth(effectiveAnnualReturn(acc), (acc.volatility || 0) / 100, z);
+        });
+        cachedYear = year;
+      }
+      return cachedGrowth[accountIndex];
+    };
+  }
+
+  function percentileOf(sorted, p) {
+    const n = sorted.length;
+    if (n === 0) return 0;
+    if (n === 1) return sorted[0];
+    const idx = (n - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  }
+
+  function setMcProgress(frac) {
+    el.mcProgressBar.style.width = (frac * 100).toFixed(1) + "%";
+  }
+
+  // Trials run in batches yielding to the event loop between them, so the UI stays
+  // responsive and the progress bar moves. A Web Worker would be the usual home for
+  // this, but workers are blocked on file:// origins and this app is meant to run by
+  // opening index.html directly.
+  function runMonteCarlo() {
+    if (mcRunning) return;
+
+    const cfg = readConfig();
+    if (!cfg || cfg.accounts.length === 0) return;
+
+    const trials = parseInt(el.mcTrials.value, 10) || 5000;
+    const years = cfg.totalYears + 1;
+    const signature = JSON.stringify(cfg);
+    const token = ++mcRunToken;
+    const rng = makeRng(MC_SEED);
+
+    const totalsByYear = [];
+    for (let y = 0; y < years; y++) totalsByYear.push(new Float64Array(trials));
+    const depletionAges = [];
+    let successes = 0;
+    let i = 0;
+
+    mcRunning = true;
+    el.runMcBtn.disabled = true;
+    el.runMcBtn.textContent = "Running…";
+    el.mcProgress.hidden = false;
+    el.mcStale.hidden = true;
+    setMcProgress(0);
+
+    function step() {
+      if (token !== mcRunToken) return; // superseded by a newer run
+
+      const end = Math.min(i + MC_BATCH, trials);
+      for (; i < end; i++) {
+        const path = runProjection(cfg, { draw: makeDraw(cfg, rng), lean: true });
+        for (let y = 0; y < years; y++) totalsByYear[y][i] = path.totals[y];
+        if (path.depletionAge === null) successes++;
+        else depletionAges.push(path.depletionAge);
+      }
+
+      setMcProgress(i / trials);
+      if (i < trials) {
+        setTimeout(step, 0);
+        return;
+      }
+      finish();
+    }
+
+    function finish() {
+      const p10 = [], p50 = [], p90 = [];
+      for (let y = 0; y < years; y++) {
+        const col = totalsByYear[y];
+        col.sort(); // typed arrays sort numerically
+        p10.push(percentileOf(col, 0.10));
+        p50.push(percentileOf(col, 0.50));
+        p90.push(percentileOf(col, 0.90));
+      }
+      depletionAges.sort((a, b) => a - b);
+
+      mcResults = {
+        trials,
+        successRate: successes / trials,
+        failures: trials - successes,
+        medianDepletionAge: depletionAges.length
+          ? depletionAges[Math.floor(depletionAges.length / 2)]
+          : null,
+        lifeExp: cfg.lifeExp,
+        p10, p50, p90,
+        signature,
+        stale: false,
+      };
+
+      mcRunning = false;
+      el.runMcBtn.disabled = false;
+      el.runMcBtn.textContent = "Run Simulation";
+      el.mcProgress.hidden = true;
+
+      // Inputs may have been edited while the run was in flight
+      markMonteCarloStale(readConfig());
+      renderMonteCarlo();
+      renderChart(runProjection(cfg).yearlyData, cfg.retireAge);
+    }
+
+    setTimeout(step, 0);
+  }
+
+  function markMonteCarloStale(cfg) {
+    if (!mcResults) return;
+    mcResults.stale = !cfg || JSON.stringify(cfg) !== mcResults.signature;
+    el.mcStale.hidden = !mcResults.stale;
+  }
+
+  function renderMonteCarlo() {
+    if (!mcResults) {
+      el.mcResultsBox.hidden = true;
+      el.mcEmpty.hidden = false;
+      el.mcStale.hidden = true;
+      return;
+    }
+
+    const r = mcResults;
+    const n = (v) => v.toLocaleString("en-US");
+    el.mcEmpty.hidden = true;
+    el.mcResultsBox.hidden = false;
+    el.mcStale.hidden = !r.stale;
+
+    const pct = r.successRate * 100;
+    el.mcSuccessRate.textContent = pct.toFixed(1) + "%";
+
+    const primary = el.mcResultsBox.querySelector(".mc-stat-primary");
+    primary.classList.remove("level-good", "level-fair", "level-poor");
+    primary.classList.add(pct >= 85 ? "level-good" : pct >= 70 ? "level-fair" : "level-poor");
+    el.mcSuccessNote.textContent =
+      `${n(r.trials - r.failures)} of ${n(r.trials)} simulated paths still had money at age ${r.lifeExp}`;
+
+    el.mcMedianEnd.textContent = fmt(r.p50[r.p50.length - 1]);
+
+    const p10End = r.p10[r.p10.length - 1];
+    el.mcP10End.textContent = fmt(p10End);
+    // "1 in 10 end below this" reads wrong at $0 — nothing ends below zero
+    el.mcP10Note.textContent = p10End > 0
+      ? "1 in 10 outcomes end below this"
+      : `More than 1 in 10 paths ran out entirely (${(r.failures / r.trials * 100).toFixed(1)}%)`;
+
+    if (r.medianDepletionAge === null) {
+      el.mcDepletionAge.textContent = "—";
+      el.mcDepletionNote.textContent = "No simulated path ran out of money";
+    } else {
+      el.mcDepletionAge.textContent = r.medianDepletionAge;
+      el.mcDepletionNote.textContent = `Median across the ${n(r.failures)} paths that ran out`;
+    }
+  }
+
   function clearOutputs() {
     el.summaryTotal.textContent = "$0";
     el.summaryAdj.textContent = "$0";
@@ -445,6 +759,14 @@
     el.tableHeader.innerHTML = "";
     el.taxSummary.innerHTML = "";
     if (chart) { chart.destroy(); chart = null; }
+    // Any simulation on screen described inputs that are no longer valid
+    mcRunToken++;
+    mcRunning = false;
+    mcResults = null;
+    el.runMcBtn.disabled = false;
+    el.runMcBtn.textContent = "Run Simulation";
+    el.mcProgress.hidden = true;
+    renderMonteCarlo();
   }
 
   // ── Chart ──
@@ -452,7 +774,50 @@
     const ctx = document.getElementById("projectionChart");
     const labels = data.map((d) => d.age);
 
-    const datasets = accounts.map((acc, i) => ({
+    const datasets = [];
+
+    // Simulated range first so the band renders behind the projection lines.
+    // The shaded band covers the downside — 10th percentile up to the median — because
+    // that is the half the success rate is about. The 90th percentile is off by
+    // default: over decades its upper tail runs several times higher than every other
+    // series and flattens the whole chart against the axis. Click it in the legend to
+    // bring it in (hidden datasets are excluded from the axis scale).
+    if (mcResults && mcResults.p50.length === data.length) {
+      datasets.push({
+        label: "Median (simulated)",
+        data: mcResults.p50,
+        borderColor: "#6366f1",
+        backgroundColor: "rgba(99, 102, 241, 0.14)",
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: "+1", // shade down to the 10th percentile line that follows
+        tension: 0.3,
+      });
+      datasets.push({
+        label: "10th percentile",
+        data: mcResults.p10,
+        borderColor: "rgba(99, 102, 241, 0.45)",
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+      });
+      datasets.push({
+        label: "90th percentile",
+        data: mcResults.p90,
+        borderColor: "rgba(99, 102, 241, 0.45)",
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderDash: [2, 3],
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+        hidden: true,
+      });
+    }
+
+    accounts.forEach((acc, i) => datasets.push({
       label: acc.name,
       data: data.map((d) => Math.max(d.balances[acc.id] || 0, 0)),
       borderColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
@@ -685,7 +1050,7 @@
         // Restore accounts
         nextId = data.nextId || 1;
         data.accounts.forEach((acc) => {
-          accounts.push(acc);
+          accounts.push(normalizeAccount(acc));
           renderAccount(acc);
         });
         updateStrategyVisibility();
@@ -718,6 +1083,11 @@
     saveState();
   });
 
+  el.runMcBtn.addEventListener("click", runMonteCarlo);
+
+  // Trial count lives outside the input panel, so it needs its own save hook
+  el.mcTrials.addEventListener("change", saveState);
+
   // Recalculate on any global input change
   document.querySelectorAll(".input-panel input, .input-panel select").forEach((inp) => {
     if (!inp.closest(".account-card")) {
@@ -735,4 +1105,5 @@
   }
   updateStrategyVisibility();
   recalculate();
+  renderMonteCarlo();
 })();

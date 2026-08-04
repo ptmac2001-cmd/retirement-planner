@@ -61,6 +61,7 @@
     <li><strong>Monthly Contribution</strong> — How much you add each month.</li>
     <li><strong>Employer Match</strong> — Only shown for pre-tax accounts. Enter the match percentage and the salary cap it applies to.</li>
     <li><strong>Annual Return</strong> — Expected yearly growth rate (default: 7%). This rate is used both before and during retirement.</li>
+    <li><strong>Volatility</strong> — How much this account's return varies year to year, as an annual standard deviation (default: 15%). Used <em>only</em> by the Monte Carlo simulation; the main projection ignores it. A broad stock fund is roughly 15&ndash;18%, a bond fund roughly 5&ndash;7%, and cash close to 0%.</li>
   </ul>
   <p>Click an account header to collapse/expand it. Click the <strong>&times;</strong> to remove it.</p>
   <p>Account names matter for the year-by-year table. Accounts whose names start with "Peter" are grouped into a Peter Total column, and accounts starting with "Lisa" into a Lisa Total column.</p>
@@ -71,6 +72,7 @@
     <li><strong>Monthly Social Security</strong> — Expected Social Security benefit (default: $1,800).</li>
     <li><strong>Social Security Start Age</strong> — When benefits begin (default: 67).</li>
     <li><strong>Effective Tax Rate in Retirement</strong> — Applied to pre-tax withdrawals (default: 20%).</li>
+    <li><strong>Asset Correlation</strong> — How closely your accounts move together in the Monte Carlo simulation (default: 70%). At 0% each account has an independent good or bad year; at 100% they all rise and fall together. Used only by the simulation.</li>
   </ul>
 
   <h2>Output Panel</h2>
@@ -83,6 +85,19 @@
     <li><strong>Monthly Income (After Tax)</strong> — Estimated monthly income from savings + Social Security.</li>
     <li><strong>Years of Coverage</strong> — How many years your savings can fund your expenses.</li>
   </ul>
+
+  <h3>Monte Carlo Simulation</h3>
+  <p>The main projection assumes every account earns exactly its expected return every single year. Real markets don't behave that way, and the <em>order</em> in which good and bad years arrive matters enormously once you start withdrawing. The Monte Carlo simulation re-runs your entire plan thousands of times with randomized returns to show the range of outcomes.</p>
+  <p>Pick a trial count and click <strong>Run Simulation</strong>. It reports:</p>
+  <ul>
+    <li><strong>Success Rate</strong> — The share of simulated paths that still had money left at your life expectancy. This is the headline number.</li>
+    <li><strong>Median Ending Balance</strong> — The middle outcome: half of the paths ended above this, half below.</li>
+    <li><strong>Poor Market (10th percentile)</strong> — One in ten paths ended below this. A stress-test figure.</li>
+    <li><strong>Median Depletion Age</strong> — Among the paths that ran out of money, the typical age at which it happened.</li>
+  </ul>
+  <p>After a run, the projection chart gains a simulated median line and a shaded band down to the 10th percentile &mdash; the downside range the success rate is about. The 90th percentile is available too, but starts hidden: over several decades its upper tail runs far above every other line and flattens the rest of the chart. Click it in the legend to bring it in.</p>
+  <p>Changing any input marks the results stale &mdash; re-run to refresh them.</p>
+  <p>Results are reproducible: the same inputs always produce the same success rate, so a number that moves means something you changed actually mattered.</p>
 
   <h3>Portfolio Projection Chart</h3>
   <p>A line chart showing each account's balance and the combined total from now through life expectancy. A dashed red line marks your retirement age. Individual accounts are shown as dashed lines; the total is a solid line.</p>
@@ -116,6 +131,7 @@
   <h2>Notes</h2>
   <ul>
     <li>All calculations use monthly compounding.</li>
+    <li>The main projection is deterministic — it assumes returns arrive exactly on schedule. Run the Monte Carlo simulation to see the range of realistic outcomes.</li>
     <li>Post-retirement, withdrawals are drawn proportionally from all accounts.</li>
     <li>The app runs entirely in your browser — no data is sent anywhere.</li>
   </ul>
@@ -219,6 +235,28 @@
   <p>Your accounts continue to earn returns during retirement at the same annual rate you set for each account. Each month, the balance grows by the monthly rate before the withdrawal is subtracted:</p>
   <code class="formula">Each month: New Balance = Old Balance &times; (1 + monthly rate) &minus; monthly withdrawal</code>
   <p>This means your portfolio can continue growing even during retirement if returns exceed withdrawals.</p>
+
+  <h2>A9. Monte Carlo Simulation</h2>
+  <p>The simulation runs the exact same projection engine described above, with one change: instead of every account earning its expected return every year, each year's return is drawn at random.</p>
+
+  <h3>How a year's return is drawn</h3>
+  <p>Each account's annual growth multiplier is drawn from a lognormal distribution, moment-matched so that its average equals your expected return and its standard deviation equals the volatility you set. Lognormal is used rather than a plain bell curve because it cannot produce a loss worse than &minus;100%, which a normal distribution can.</p>
+  <p>One detail matters for consistency. As described in A2, the main projection divides your annual return by 12 and compounds it monthly, so a 7% setting actually grows a balance by 7.23% over a year. The simulation therefore centres its draw on that <em>effective</em> 7.23%, not the nominal 7%, and spreads the drawn year geometrically across its months:</p>
+  <code class="formula">monthly rate = (annual growth multiplier)<sup>1/12</sup> &minus; 1</code>
+  <p>Together these mean the realized growth over a simulated year is exactly the multiplier that was drawn, with no extra compounding bias, and that setting every account's volatility to 0% makes every simulated path land precisely on the main projection &mdash; a useful way to confirm the two models agree.</p>
+  <p>A consequence worth understanding: the <em>median</em> simulated outcome sits below the deterministic projection, and the gap widens the longer the horizon and the higher the volatility. That is not an error. Volatile returns compound to less than their average suggests, so the deterministic line is closer to an average-of-outcomes than to a typical outcome.</p>
+
+  <h3>Correlation between accounts</h3>
+  <p>Accounts do not get independent random years by default. Each year the simulation draws one shared "market" shock plus a separate shock for each account, and blends them:</p>
+  <code class="formula">account shock = &radic;&rho; &times; market shock + &radic;(1 &minus; &rho;) &times; account&#8209;specific shock</code>
+  <p>where &rho; is the Asset Correlation setting. This makes the correlation between any two accounts exactly &rho;. It matters: if every account were drawn independently, a portfolio spread across several accounts would get unrealistic diversification and the success rate would come out too optimistic.</p>
+
+  <h3>What counts as success</h3>
+  <p>A path succeeds if the portfolio still holds money at your life expectancy. A path fails the first year in retirement that the combined balance reaches zero, and that age is recorded for the median depletion figure. Depletion is only counted after retirement begins, since drawing down is what can exhaust a portfolio.</p>
+
+  <h3>Reproducibility and limits</h3>
+  <p>The random number generator is seeded identically on every run, so the same inputs always give the same answer instead of a success rate that drifts by a point with each click.</p>
+  <p>Some things are deliberately <em>not</em> randomized: inflation, Social Security, your contributions, and your tax rate are all held at their fixed assumptions. Only investment returns vary. The simulation also assumes each account's volatility and expected return stay constant for your whole life, with no glide path toward safer assets as you age.</p>
 
 </body>
 </html>

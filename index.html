@@ -99,6 +99,10 @@
             <span>Effective Tax Rate in Retirement (%)</span>
             <input type="number" id="taxRate" value="20" min="0" max="50" step="0.5">
           </label>
+          <label title="How closely accounts move together in the Monte Carlo simulation. 0% = each account moves independently, 100% = all accounts rise and fall together.">
+            <span>Asset Correlation (%)</span>
+            <input type="number" id="assetCorrelation" value="70" min="0" max="100" step="5">
+          </label>
         </div>
         <div class="export-import-row">
           <button id="exportBtn" class="btn btn-secondary">Export Data</button>
@@ -128,6 +132,56 @@
         <div class="summary-card">
           <span class="card-label">Years of Coverage</span>
           <span class="card-value" id="yearsCoverage">0</span>
+        </div>
+      </div>
+
+      <div class="panel-section" id="monteCarloSection">
+        <div class="mc-header">
+          <h2>Monte Carlo Simulation</h2>
+          <div class="mc-controls">
+            <select id="mcTrials" aria-label="Number of trials">
+              <option value="1000">1,000 trials</option>
+              <option value="5000" selected>5,000 trials</option>
+              <option value="10000">10,000 trials</option>
+            </select>
+            <button id="runMcBtn" class="btn btn-primary">Run Simulation</button>
+          </div>
+        </div>
+
+        <div class="mc-progress" id="mcProgress" hidden>
+          <div class="mc-progress-bar" id="mcProgressBar"></div>
+        </div>
+
+        <p class="mc-note" id="mcEmpty">
+          The projection above assumes every account earns its expected return every single year.
+          Run a simulation to see how the plan holds up across thousands of randomized market paths.
+        </p>
+
+        <p class="mc-note mc-stale" id="mcStale" hidden>
+          Inputs have changed since this simulation ran — re-run for updated results.
+        </p>
+
+        <div class="mc-results" id="mcResults" hidden>
+          <div class="mc-stat mc-stat-primary">
+            <span class="card-label">Success Rate</span>
+            <span class="card-value" id="mcSuccessRate">—</span>
+            <span class="mc-stat-note" id="mcSuccessNote"></span>
+          </div>
+          <div class="mc-stat">
+            <span class="card-label">Median Ending Balance</span>
+            <span class="card-value" id="mcMedianEnd">—</span>
+            <span class="mc-stat-note">50th percentile at life expectancy</span>
+          </div>
+          <div class="mc-stat">
+            <span class="card-label">Poor Market (10th pct)</span>
+            <span class="card-value" id="mcP10End">—</span>
+            <span class="mc-stat-note" id="mcP10Note">1 in 10 outcomes end below this</span>
+          </div>
+          <div class="mc-stat">
+            <span class="card-label">Median Depletion Age</span>
+            <span class="card-value" id="mcDepletionAge">—</span>
+            <span class="mc-stat-note" id="mcDepletionNote">Among trials that run out</span>
+          </div>
         </div>
       </div>
 
@@ -206,6 +260,10 @@
           <label>
             <span>Annual Return (%)</span>
             <input type="number" class="acc-return" value="7" min="0" max="30" step="0.1">
+          </label>
+          <label title="Annual standard deviation of returns. Used only by the Monte Carlo simulation. 0% means this account always earns exactly its expected return.">
+            <span>Volatility (% std dev)</span>
+            <input type="number" class="acc-volatility" value="15" min="0" max="60" step="0.5">
           </label>
         </div>
       </div>
