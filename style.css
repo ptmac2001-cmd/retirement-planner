@@ -4,6 +4,12 @@
   padding: 0;
 }
 
+/* A class setting `display` outbids the UA stylesheet's [hidden] rule, which would
+   leave elements toggled via the hidden attribute stuck on screen. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: light;
 
