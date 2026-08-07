@@ -64,6 +64,7 @@
       <div class="panel-section">
         <h2>Retirement Accounts</h2>
         <div id="accountsList"></div>
+        <datalist id="ownerNames"></datalist>
         <div class="add-account-row">
           <select id="accountTemplate">
             <option value="401k">401(k)</option>
@@ -104,6 +105,17 @@
             <input type="number" id="assetCorrelation" value="70" min="0" max="100" step="5">
           </label>
         </div>
+
+        <div class="override-row">
+          <label class="checkbox-label" title="Applies one return assumption to every account, ignoring the per-account rates.">
+            <input type="checkbox" id="globalReturnEnabled">
+            <span>Override every account's annual return</span>
+          </label>
+          <label id="globalReturnLabel" class="override-input">
+            <span>Global Annual Return (%)</span>
+            <input type="number" id="globalReturn" value="7" min="0" max="30" step="0.1">
+          </label>
+        </div>
         <div class="export-import-row">
           <button id="exportBtn" class="btn btn-secondary">Export Data</button>
           <button id="importBtn" class="btn btn-secondary">Import Data</button>
@@ -126,7 +138,7 @@
           <span class="card-value" id="inflationAdjusted">$0</span>
         </div>
         <div class="summary-card">
-          <span class="card-label">Monthly Income (After Tax)</span>
+          <span class="card-label">Monthly Income (After Tax, Today's $)</span>
           <span class="card-value" id="monthlyIncome">$0</span>
         </div>
         <div class="summary-card">
@@ -218,6 +230,7 @@
       <div class="account-header">
         <button class="collapse-toggle" aria-label="Toggle account details">&#9660;</button>
         <span class="account-name-display"></span>
+        <span class="owner-chip"></span>
         <span class="tax-badge"></span>
         <button class="remove-btn" aria-label="Remove account">&times;</button>
       </div>
@@ -225,7 +238,11 @@
         <div class="form-grid">
           <label>
             <span>Account Name</span>
-            <input type="text" class="acc-name" placeholder="Account name">
+            <input type="text" class="acc-name" placeholder="e.g. Fidelity 401(k)">
+          </label>
+          <label title="Who owns this account. Accounts are grouped by owner and each owner gets a subtotal column in the year-by-year table.">
+            <span>Owner</span>
+            <input type="text" class="acc-owner" list="ownerNames" placeholder="e.g. Peter">
           </label>
           <label>
             <span>Tax Treatment</span>
@@ -257,9 +274,10 @@
             <span>Match Cap (% of salary)</span>
             <input type="number" class="acc-match-cap" value="0" min="0" max="100" step="0.5">
           </label>
-          <label>
+          <label class="acc-return-field">
             <span>Annual Return (%)</span>
             <input type="number" class="acc-return" value="7" min="0" max="30" step="0.1">
+            <small class="override-note" hidden>Overridden by the global rate in General Settings</small>
           </label>
           <label title="Annual standard deviation of returns. Used only by the Monte Carlo simulation. 0% means this account always earns exactly its expected return.">
             <span>Volatility (% std dev)</span>
