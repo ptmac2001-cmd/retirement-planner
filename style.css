@@ -378,6 +378,110 @@ header h1 {
   display: none !important;
 }
 
+/* Owner grouping */
+.owner-group {
+  margin-bottom: 1rem;
+}
+
+.owner-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--clr-text-muted);
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--clr-border);
+}
+
+.owner-chip {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(9, 9, 11, 0.05);
+  color: var(--clr-text-muted);
+  border: 1px solid var(--clr-border-strong);
+  white-space: nowrap;
+}
+
+/* Global return override */
+.override-row {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--clr-border);
+  display: grid;
+  gap: 0.6rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--clr-primary);
+  cursor: pointer;
+}
+
+.override-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--clr-text-muted);
+  max-width: 50%;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.override-input.is-active {
+  opacity: 1;
+}
+
+.override-input span {
+  font-weight: 500;
+}
+
+.override-input input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--clr-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--clr-text);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.override-input input:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px var(--clr-ring);
+}
+
+.form-grid input.is-overridden {
+  background: rgba(9, 9, 11, 0.045);
+  color: var(--clr-text-muted);
+  cursor: not-allowed;
+}
+
+.override-note {
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: var(--clr-text-muted);
+  opacity: 0.85;
+}
+
 /* Summary Cards — asymmetrical Bento Grid */
 .summary-cards {
   display: grid;
@@ -601,6 +705,14 @@ header h1 {
   grid-column: 1 / -1;
   background: rgba(99, 102, 241, 0.07);
   border-color: rgba(99, 102, 241, 0.25);
+}
+
+.tax-group .detail.tax-note {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--clr-border);
+  font-size: 0.72rem;
+  font-style: italic;
 }
 
 /* Table */

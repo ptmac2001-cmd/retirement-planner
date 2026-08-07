@@ -46,6 +46,10 @@
     ssStartAge:     $("#ssStartAge"),
     taxRate:        $("#taxRate"),
     assetCorrelation: $("#assetCorrelation"),
+    globalReturnEnabled: $("#globalReturnEnabled"),
+    globalReturn:   $("#globalReturn"),
+    globalReturnLabel: $("#globalReturnLabel"),
+    ownerNames:     $("#ownerNames"),
     mcTrials:       $("#mcTrials"),
     runMcBtn:       $("#runMcBtn"),
     mcProgress:     $("#mcProgress"),
@@ -83,6 +87,13 @@
 
   function getVal(input) {
     return parseFloat(input.value) || 0;
+  }
+
+  // Account and owner names are user text that ends up inside innerHTML strings
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
   }
 
   function getAgeFromBirthdate() {
@@ -124,15 +135,51 @@
     "annualIncome", "withdrawalStrategy", "monthlyExpenses",
     "withdrawalPct", "inflationRate",
     "socialSecurity", "ssStartAge", "taxRate",
-    "assetCorrelation", "mcTrials",
+    "assetCorrelation", "mcTrials", "globalReturn",
   ];
+
+  // Checkboxes carry state in .checked, not .value, so they save/load separately.
+  const GLOBAL_CHECKBOXES = ["globalReturnEnabled"];
 
   // Fills in fields added after a save was written, so old saves/exports still load.
   function normalizeAccount(acc) {
     if (typeof acc.volatility !== "number" || !isFinite(acc.volatility)) {
       acc.volatility = DEFAULT_VOLATILITY;
     }
+    if (typeof acc.owner !== "string") {
+      // Saves written before accounts had an owner encoded the person in the name
+      // ("Peter 401(k)"), which is what the old hard-coded Peter/Lisa subtotal
+      // columns matched on. Lift that prefix into a real owner field so those
+      // subtotals keep working instead of silently reading $0.
+      const m = /^([A-Za-z][A-Za-z.'-]*)\s+(.*\S)$/.exec(acc.name || "");
+      if (m && LEGACY_OWNER_PREFIXES.includes(m[1].toLowerCase())) {
+        acc.owner = m[1];
+        acc.name = m[2];
+      } else {
+        acc.owner = "";
+      }
+    }
+    if (typeof acc.collapsed !== "boolean") acc.collapsed = false;
     return acc;
+  }
+
+  // Owner names the pre-owner-field version of the app grouped on.
+  const LEGACY_OWNER_PREFIXES = ["peter", "lisa"];
+
+  const UNASSIGNED = "Unassigned";
+
+  function ownerLabel(owner) {
+    return owner && owner.trim() ? owner.trim() : UNASSIGNED;
+  }
+
+  // Distinct owners in the order their accounts appear.
+  function distinctOwners() {
+    const seen = [];
+    accounts.forEach((a) => {
+      const label = ownerLabel(a.owner);
+      if (!seen.includes(label)) seen.push(label);
+    });
+    return seen;
   }
 
   function updateStrategyVisibility() {
@@ -153,6 +200,9 @@
     const globals = {};
     GLOBAL_INPUTS.forEach((key) => {
       globals[key] = el[key].value;
+    });
+    GLOBAL_CHECKBOXES.forEach((key) => {
+      globals[key] = el[key].checked;
     });
     const state = {
       globals,
@@ -177,15 +227,18 @@
             el[key].value = state.globals[key];
           }
         });
+        GLOBAL_CHECKBOXES.forEach((key) => {
+          if (state.globals[key] !== undefined) {
+            el[key].checked = !!state.globals[key];
+          }
+        });
       }
 
       // Restore accounts
       if (state.accounts && state.accounts.length > 0) {
         nextId = state.nextId || 1;
-        state.accounts.forEach((acc) => {
-          accounts.push(normalizeAccount(acc));
-          renderAccount(acc);
-        });
+        state.accounts.forEach((acc) => accounts.push(normalizeAccount(acc)));
+        renderAccountsList();
         return true;
       }
     } catch (e) { /* corrupt data — ignore */ }
@@ -193,12 +246,25 @@
   }
 
   // ── Account Management ──
+  // Adding three 401(k)s used to leave three cards all reading "401(k)", with no way
+  // to tell them apart in the header, the chart legend, or the table.
+  function uniqueName(base) {
+    const taken = accounts.map((a) => a.name);
+    if (!taken.includes(base)) return base;
+    let n = 2;
+    while (taken.includes(`${base} ${n}`)) n++;
+    return `${base} ${n}`;
+  }
+
   function addAccount(presetKey) {
     const preset = PRESETS[presetKey] || PRESETS.custom;
     const id = nextId++;
     const acc = {
       id,
-      name: preset.name,
+      name: uniqueName(preset.name),
+      // New accounts inherit the last owner used, so filling out one person's
+      // accounts back to back does not mean retyping their name every time.
+      owner: accounts.length ? accounts[accounts.length - 1].owner : "",
       tax: preset.tax,
       balance: 0,
       contribution: preset.contribution,
@@ -206,28 +272,65 @@
       matchCap: preset.matchCap,
       annualReturn: 7,
       volatility: preset.volatility,
+      collapsed: false,
     };
     accounts.push(acc);
-    renderAccount(acc);
+    renderAccountsList();
     recalculate();
     saveState();
   }
 
   function removeAccount(id) {
     accounts = accounts.filter((a) => a.id !== id);
-    const card = $(`.account-card[data-id="${id}"]`);
-    if (card) card.remove();
+    renderAccountsList();
     recalculate();
     saveState();
   }
 
-  function renderAccount(acc) {
+  // Rebuilds the whole list, grouped by owner. Called on add/remove and whenever an
+  // owner name is committed — never on every keystroke, which would steal focus.
+  function renderAccountsList() {
+    el.accountsList.innerHTML = "";
+
+    const owners = distinctOwners();
+    const showGroups = owners.length > 1;
+
+    owners.forEach((owner) => {
+      let container = el.accountsList;
+      if (showGroups) {
+        const group = document.createElement("div");
+        group.className = "owner-group";
+        const header = document.createElement("div");
+        header.className = "owner-group-header";
+        header.innerHTML = `<span>${escapeHtml(owner)}</span>`;
+        group.appendChild(header);
+        el.accountsList.appendChild(group);
+        container = group;
+      }
+      accounts
+        .filter((a) => ownerLabel(a.owner) === owner)
+        .forEach((acc) => container.appendChild(buildAccountCard(acc, showGroups)));
+    });
+
+    refreshOwnerDatalist();
+  }
+
+  function refreshOwnerDatalist() {
+    el.ownerNames.innerHTML = distinctOwners()
+      .filter((o) => o !== UNASSIGNED)
+      .map((o) => `<option value="${escapeHtml(o)}"></option>`)
+      .join("");
+  }
+
+  function buildAccountCard(acc, inOwnerGroup) {
     const tpl = $("#accountTemplate-tpl").content.cloneNode(true);
     const card = tpl.querySelector(".account-card");
     card.dataset.id = acc.id;
+    if (acc.collapsed) card.classList.add("collapsed");
 
     card.querySelector(".account-name-display").textContent = acc.name;
     card.querySelector(".acc-name").value = acc.name;
+    card.querySelector(".acc-owner").value = acc.owner;
     card.querySelector(".acc-tax").value = acc.tax;
     card.querySelector(".acc-balance").value = acc.balance;
     card.querySelector(".acc-contribution").value = acc.contribution;
@@ -238,18 +341,26 @@
 
     updateBadge(card, acc.tax);
     updateMatchVisibility(card, acc.tax);
+    updateReturnOverrideUI(card);
+    // The group heading already names the owner — repeating it on every card is noise.
+    updateOwnerChip(card, acc.owner, inOwnerGroup);
 
-    // Collapse toggle
+    function toggleCollapse() {
+      card.classList.toggle("collapsed");
+      acc.collapsed = card.classList.contains("collapsed");
+      saveState();
+    }
+
     card.querySelector(".collapse-toggle").addEventListener("click", (e) => {
       e.stopPropagation();
-      card.classList.toggle("collapsed");
+      toggleCollapse();
     });
 
-    card.querySelector(".account-header").addEventListener("click", () => {
-      card.classList.toggle("collapsed");
-    });
+    card.querySelector(".account-header").addEventListener("click", toggleCollapse);
 
-    // Remove
+    // Keep clicks inside the form from bubbling up to the header's collapse handler
+    card.querySelector(".account-body").addEventListener("click", (e) => e.stopPropagation());
+
     card.querySelector(".remove-btn").addEventListener("click", (e) => {
       e.stopPropagation();
       removeAccount(acc.id);
@@ -260,26 +371,46 @@
       inp.addEventListener("input", () => syncAccount(acc.id, card));
     });
 
-    el.accountsList.appendChild(card);
+    // Committing an owner name can move this card into a different group
+    card.querySelector(".acc-owner").addEventListener("change", () => {
+      syncAccount(acc.id, card);
+      renderAccountsList();
+    });
+
+    return card;
   }
 
   function syncAccount(id, card) {
     const acc = accounts.find((a) => a.id === id);
     if (!acc) return;
     acc.name = card.querySelector(".acc-name").value || "Account";
+    acc.owner = card.querySelector(".acc-owner").value.trim();
     acc.tax = card.querySelector(".acc-tax").value;
     acc.balance = getVal(card.querySelector(".acc-balance"));
     acc.contribution = getVal(card.querySelector(".acc-contribution"));
     acc.matchPct = getVal(card.querySelector(".acc-match-pct"));
     acc.matchCap = getVal(card.querySelector(".acc-match-cap"));
-    acc.annualReturn = getVal(card.querySelector(".acc-return"));
+    // While the override is on, the return input displays the global rate. Reading it
+    // back would overwrite — and permanently lose — the account's own rate.
+    if (globalReturnOverride() === null) {
+      acc.annualReturn = getVal(card.querySelector(".acc-return"));
+    }
     acc.volatility = getVal(card.querySelector(".acc-volatility"));
 
     card.querySelector(".account-name-display").textContent = acc.name;
     updateBadge(card, acc.tax);
     updateMatchVisibility(card, acc.tax);
+    updateOwnerChip(card, acc.owner, !!card.closest(".owner-group"));
+    refreshOwnerDatalist();
     recalculate();
     saveState();
+  }
+
+  function updateOwnerChip(card, owner, inOwnerGroup) {
+    const chip = card.querySelector(".owner-chip");
+    const show = !inOwnerGroup && owner && owner.trim();
+    chip.textContent = show ? owner.trim() : "";
+    chip.hidden = !show;
   }
 
   function updateBadge(card, tax) {
@@ -296,6 +427,36 @@
     });
   }
 
+  // ── Global return override ──
+  // Returns the return (%) every account should use, or null to use each account's own.
+  function globalReturnOverride() {
+    if (!el.globalReturnEnabled.checked) return null;
+    const v = parseFloat(el.globalReturn.value);
+    return isFinite(v) ? v : null;
+  }
+
+  // The per-account return input stays visible but goes read-only while the override
+  // is on, so the number on screen never contradicts the number being projected.
+  function updateReturnOverrideUI(card) {
+    const override = globalReturnOverride();
+    const input = card.querySelector(".acc-return");
+    const note = card.querySelector(".override-note");
+    input.disabled = override !== null;
+    input.classList.toggle("is-overridden", override !== null);
+    note.hidden = override === null;
+    if (note.hidden) {
+      const acc = accounts.find((a) => String(a.id) === card.dataset.id);
+      if (acc) input.value = acc.annualReturn;
+    } else {
+      input.value = override;
+    }
+  }
+
+  function applyReturnOverrideToCards() {
+    $$(".account-card").forEach(updateReturnOverrideUI);
+    el.globalReturnLabel.classList.toggle("is-active", el.globalReturnEnabled.checked);
+  }
+
   // ── Calculation Engine ──
   // Reads every input into a plain snapshot. Returns null when the inputs are
   // not yet coherent (the same guard the old recalculate() used).
@@ -305,6 +466,10 @@
     const lifeExp = getVal(el.lifeExpectancy);
 
     if (currentAge <= 0 || currentAge >= lifeExp || currentAge >= retireAge) return null;
+
+    // Applying the override here means every downstream consumer — the deterministic
+    // projection, the Monte Carlo draws, the income estimate — picks it up for free.
+    const override = globalReturnOverride();
 
     return {
       currentAge,
@@ -322,8 +487,12 @@
       totalYears: lifeExp - currentAge,
       yearsToRetire: retireAge - currentAge,
       firstYearMonths: getMonthsToNextBirthday(),
+      returnOverride: override,
       // Snapshot so a long simulation is not disturbed by edits mid-run
-      accounts: accounts.map((a) => ({ ...a })),
+      accounts: accounts.map((a) => ({
+        ...a,
+        annualReturn: override !== null ? override : a.annualReturn,
+      })),
     };
   }
 
@@ -351,6 +520,7 @@
       const monthsThisYear = y === 1 ? cfg.firstYearMonths : 12;
 
       let yearWithdrawal = 0;
+      let yearTax = 0;
 
       // Year 0 = current age: record starting balances, no growth yet
       if (y > 0) {
@@ -403,18 +573,23 @@
 
           const totalBal = accs.reduce((s, a) => s + Math.max(balances[a.id], 0), 0);
 
+          // "fixed" states a spending need — money the retiree must have left after
+          // tax — so the withdrawal has to be grossed up to cover the tax bill. The
+          // 4% rule and custom-% strategies instead state a share of the balance,
+          // which is already a gross withdrawal; grossing those up again charged the
+          // tax twice and drained the portfolio faster than the strategy calls for.
+          const needIsGross = cfg.strategy !== "fixed";
+
           accs.forEach((acc, ai) => {
             const monthlyRate = monthlyRateFor(acc, ai, y, draw);
             const proportion = totalBal > 0 ? Math.max(balances[acc.id], 0) / totalBal : 0;
 
-            let rawWithdrawal = monthlyNeed * proportion;
-            if (acc.tax === "pretax") {
-              rawWithdrawal = rawWithdrawal / (1 - cfg.taxRatePct);
-            } else if (acc.tax === "taxable") {
-              rawWithdrawal = rawWithdrawal / (1 - 0.5 * 0.15);
-            }
+            const share = monthlyNeed * proportion;
+            const rate = effectiveTaxRate(acc, cfg.taxRatePct);
+            const rawWithdrawal = needIsGross ? share : share / (1 - rate);
 
             yearWithdrawal += rawWithdrawal * monthsThisYear;
+            yearTax += rawWithdrawal * rate * monthsThisYear;
 
             for (let m = 0; m < monthsThisYear; m++) {
               balances[acc.id] = balances[acc.id] * (1 + monthlyRate) - rawWithdrawal;
@@ -441,12 +616,26 @@
           total,
           inflAdj: total / inflationFactor,
           withdrawal: yearWithdrawal,
+          tax: yearTax,
           inflFactor: inflationFactor,
         });
       }
     }
 
     return { yearlyData, totals, depletionAge };
+  }
+
+  // Share of a withdrawal lost to tax, by account type.
+  //   pre-tax  — never taxed going in, so every dollar out is ordinary income
+  //   roth     — taxed going in, so withdrawals come out clean
+  //   taxable  — only the gain is taxed; assume ~50% of the balance is gain, at 15%
+  const TAXABLE_GAIN_FRACTION = 0.5;
+  const CAP_GAINS_RATE = 0.15;
+
+  function effectiveTaxRate(acc, taxRatePct) {
+    if (acc.tax === "pretax") return taxRatePct;
+    if (acc.tax === "taxable") return TAXABLE_GAIN_FRACTION * CAP_GAINS_RATE;
+    return 0;
   }
 
   function monthlyRateFor(acc, accountIndex, year, draw) {
@@ -473,7 +662,7 @@
       return;
     }
 
-    const { retireAge, lifeExp, ssMonthly, ssStartAge, taxRatePct, yearsToRetire } = cfg;
+    const { retireAge, lifeExp, yearsToRetire } = cfg;
 
     const { yearlyData } = runProjection(cfg);
 
@@ -486,9 +675,9 @@
     const totalAtRetire = retireRow.total;
     const inflAdj = retireRow.inflAdj;
 
-    // Monthly income from savings (simple: spread over retirement years)
+    // Sustainable monthly income from savings, in today's dollars
     const retirementYears = lifeExp - retireAge;
-    const totalAfterTaxIncome = computeAfterTaxMonthlyIncome(retireRow.balances, retirementYears, taxRatePct, ssMonthly, ssStartAge <= retireAge);
+    const income = computeRetirementIncome(retireRow.balances, cfg);
 
     // Years of coverage: find when total hits 0
     let coverageYears = retirementYears;
@@ -501,34 +690,62 @@
 
     el.summaryTotal.textContent = fmt(totalAtRetire);
     el.summaryAdj.textContent = fmt(inflAdj);
-    el.summaryIncome.textContent = fmt(totalAfterTaxIncome);
+    el.summaryIncome.textContent = fmt(income.netMonthly);
     el.summaryCoverage.textContent = coverageYears + (coverageYears >= retirementYears ? "+" : "") + " yrs";
 
     renderChart(yearlyData, retireAge);
     renderTable(yearlyData, retireAge);
-    renderTaxSummary(retireRow.balances, taxRatePct, retirementYears, ssMonthly, ssStartAge <= retireAge);
+    renderTaxSummary(cfg, income);
   }
 
-  function computeAfterTaxMonthlyIncome(balances, retirementYears, taxRate, ssMonthly, ssActive) {
-    const totalMonths = retirementYears * 12;
-    if (totalMonths <= 0) return ssActive ? ssMonthly : 0;
+  // What a balance can pay out each month, in today's dollars, if it keeps earning its
+  // return through retirement and is drawn down to zero over `months`.
+  //
+  // The previous estimate was simply balance / months. That assumed the portfolio stops
+  // growing the day you retire and that a dollar paid out in year 25 is worth the same
+  // as one paid out in year 1 — so it both understated sustainable income and quietly
+  // disagreed with the year-by-year projection right below it on the page.
+  function annuityMonthlyPayment(balance, annualReturnPct, inflationPct, months) {
+    if (months <= 0 || balance <= 0) return 0;
+    const realAnnual = (1 + annualReturnPct / 100) / (1 + inflationPct) - 1;
+    const r = realAnnual / 12;
+    if (Math.abs(r) < 1e-9) return balance / months;
+    return (balance * r) / (1 - Math.pow(1 + r, -months));
+  }
 
-    let monthlyIncome = 0;
-    accounts.forEach((acc) => {
-      const bal = balances[acc.id] || 0;
-      const gross = bal / totalMonths;
-      if (acc.tax === "pretax") {
-        monthlyIncome += gross * (1 - taxRate);
-      } else if (acc.tax === "roth") {
-        monthlyIncome += gross;
-      } else {
-        // Taxable: ~50% gains taxed at 15%
-        monthlyIncome += gross * (1 - 0.5 * 0.15);
-      }
+  // Sustainable monthly retirement income in today's dollars, split by tax treatment.
+  function computeRetirementIncome(balances, cfg) {
+    const months = Math.max(cfg.lifeExp - cfg.retireAge, 0) * 12;
+    const byTax = {
+      pretax:  { balance: 0, gross: 0, tax: 0, net: 0 },
+      roth:    { balance: 0, gross: 0, tax: 0, net: 0 },
+      taxable: { balance: 0, gross: 0, tax: 0, net: 0 },
+    };
+
+    cfg.accounts.forEach((acc) => {
+      const bucket = byTax[acc.tax] || byTax.taxable;
+      const balance = balances[acc.id] || 0;
+      const gross = annuityMonthlyPayment(balance, acc.annualReturn, cfg.inflationPct, months);
+      const tax = gross * effectiveTaxRate(acc, cfg.taxRatePct);
+      bucket.balance += balance;
+      bucket.gross += gross;
+      bucket.tax += tax;
+      bucket.net += gross - tax;
     });
 
-    if (ssActive) monthlyIncome += ssMonthly;
-    return monthlyIncome;
+    const ssActive = cfg.ssStartAge <= cfg.retireAge;
+    const ssMonthly = ssActive ? cfg.ssMonthly : 0;
+
+    return {
+      byTax,
+      months,
+      totalBalance: byTax.pretax.balance + byTax.roth.balance + byTax.taxable.balance,
+      grossMonthly: byTax.pretax.gross + byTax.roth.gross + byTax.taxable.gross,
+      taxMonthly: byTax.pretax.tax + byTax.roth.tax + byTax.taxable.tax,
+      netMonthly: byTax.pretax.net + byTax.roth.net + byTax.taxable.net + ssMonthly,
+      ssActive,
+      ssMonthly,
+    };
   }
 
   // ── Monte Carlo ──
@@ -771,6 +988,11 @@
 
   // ── Chart ──
   function renderChart(data, retireAge) {
+    // Chart.js comes from a CDN, so it is missing whenever the page is opened offline.
+    // Without this guard the throw propagates out of recalculate() and takes the table
+    // and tax panel down with it — the whole page goes blank over one failed request.
+    if (typeof Chart === "undefined") return;
+
     const ctx = document.getElementById("projectionChart");
     const labels = data.map((d) => d.age);
 
@@ -817,8 +1039,9 @@
       });
     }
 
+    const showOwnerInLegend = distinctOwners().length > 1;
     accounts.forEach((acc, i) => datasets.push({
-      label: acc.name,
+      label: showOwnerInLegend ? `${ownerLabel(acc.owner)} — ${acc.name}` : acc.name,
       data: data.map((d) => Math.max(d.balances[acc.id] || 0, 0)),
       borderColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
       backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] + "20",
@@ -933,20 +1156,28 @@
   }
 
   // ── Table ──
-  // Name-based account groups for subtotals
-  const ACCOUNT_GROUPS = ["Peter", "Lisa"];
+  // Subtotal columns, one per owner. These used to be a hard-coded ["Peter", "Lisa"]
+  // matched against the start of each account's name, so they read $0 for anyone whose
+  // accounts were not named that way. They now follow the owner field on each account.
+  function ownerColumns() {
+    const owners = distinctOwners();
+    // A single owner's subtotal is just the grand total — no point printing it twice
+    return owners.length > 1 ? owners : [];
+  }
 
-  function getGroupTotal(balances, prefix) {
+  function getOwnerTotal(balances, owner) {
     return accounts
-      .filter((a) => a.name.toLowerCase().startsWith(prefix.toLowerCase()))
+      .filter((a) => ownerLabel(a.owner) === owner)
       .reduce((s, a) => s + (balances[a.id] || 0), 0);
   }
 
   function renderTable(data, retireAge) {
+    const owners = ownerColumns();
+
     // Header
     let headerHTML = "<th>Age</th>";
-    ACCOUNT_GROUPS.forEach((g) => { headerHTML += `<th>${g} Total</th>`; });
-    headerHTML += "<th>Grand Total</th><th>Inf Adj Tot</th><th>Withdrawals</th><th>Inf Adj Withdrawals</th>";
+    owners.forEach((o) => { headerHTML += `<th>${escapeHtml(o)} Total</th>`; });
+    headerHTML += "<th>Grand Total</th><th>Inf Adj Tot</th><th>Withdrawals</th><th>Inf Adj Withdrawals</th><th>Est. Tax</th>";
     el.tableHeader.innerHTML = headerHTML;
 
     // Body
@@ -954,59 +1185,67 @@
     data.forEach((row) => {
       const cls = row.age === retireAge ? ' class="retirement-row"' : "";
       bodyHTML += `<tr${cls}><td>${row.age}</td>`;
-      ACCOUNT_GROUPS.forEach((g) => {
-        bodyHTML += `<td>${fmt(getGroupTotal(row.balances, g))}</td>`;
+      owners.forEach((o) => {
+        bodyHTML += `<td>${fmt(getOwnerTotal(row.balances, o))}</td>`;
       });
       const wd = row.withdrawal > 0 ? fmt(row.withdrawal) : "—";
       const inflAdjWd = row.withdrawal > 0 ? fmt(row.withdrawal / row.inflFactor) : "—";
-      bodyHTML += `<td>${fmt(row.total)}</td><td>${fmt(row.inflAdj)}</td><td>${wd}</td><td>${inflAdjWd}</td></tr>`;
+      const tax = row.withdrawal > 0 ? fmt(row.tax) : "—";
+      bodyHTML += `<td>${fmt(row.total)}</td><td>${fmt(row.inflAdj)}</td><td>${wd}</td><td>${inflAdjWd}</td><td>${tax}</td></tr>`;
     });
     el.tableBody.innerHTML = bodyHTML;
   }
 
   // ── Tax Summary ──
-  function renderTaxSummary(balances, taxRate, retirementYears, ssMonthly, ssActive) {
-    const groups = { pretax: 0, roth: 0, taxable: 0 };
-    accounts.forEach((acc) => {
-      groups[acc.tax] = (groups[acc.tax] || 0) + (balances[acc.id] || 0);
-    });
-    const total = groups.pretax + groups.roth + groups.taxable;
+  function renderTaxSummary(cfg, income) {
+    const { byTax } = income;
+    const total = income.totalBalance;
+    const pct = (v) => (total > 0 ? ((v / total) * 100).toFixed(1) : "0.0");
+    const taxRatePct = (cfg.taxRatePct * 100).toFixed(0);
+    const capGainsPct = (TAXABLE_GAIN_FRACTION * CAP_GAINS_RATE * 100).toFixed(1);
 
-    const totalMonths = retirementYears * 12;
+    const ssLine = income.ssActive
+      ? `Includes Social Security: ${fmt(income.ssMonthly)}`
+      : `Social Security not included — starts at age ${cfg.ssStartAge}, after you retire at ${cfg.retireAge}`;
 
-    const pretaxMonthly = totalMonths > 0 ? groups.pretax / totalMonths : 0;
-    const rothMonthly = totalMonths > 0 ? groups.roth / totalMonths : 0;
-    const taxableMonthly = totalMonths > 0 ? groups.taxable / totalMonths : 0;
-
-    const taxOnPretax = pretaxMonthly * taxRate;
-    const taxOnTaxable = taxableMonthly * 0.5 * 0.15;
-    const totalTax = taxOnPretax + taxOnTaxable;
-    const afterTaxIncome = pretaxMonthly - taxOnPretax + rothMonthly + taxableMonthly - taxOnTaxable + (ssActive ? ssMonthly : 0);
+    // Naming which balances actually generate the tax bill: a 100% pre-tax portfolio
+    // showing a monthly tax figure is correct, not a bug, and the card should say why.
+    const taxedBuckets = [];
+    if (byTax.pretax.balance > 0) taxedBuckets.push(`pre-tax withdrawals at ${taxRatePct}%`);
+    if (byTax.taxable.balance > 0) taxedBuckets.push(`taxable gains at ~${capGainsPct}% effective`);
+    const sourceLine = taxedBuckets.length
+      ? `From ${taxedBuckets.join(" and ")}`
+      : "Nothing here is taxed on withdrawal";
 
     el.taxSummary.innerHTML = `
       <div class="tax-group">
         <h3 style="color: var(--clr-pretax)">Pre-tax</h3>
-        <div class="amount">${fmt(groups.pretax)}</div>
-        <div class="detail">${total > 0 ? ((groups.pretax / total) * 100).toFixed(1) : 0}% of portfolio</div>
-        <div class="detail">Taxed at ${(taxRate * 100).toFixed(0)}% on withdrawal</div>
+        <div class="amount">${fmt(byTax.pretax.balance)}</div>
+        <div class="detail">${pct(byTax.pretax.balance)}% of portfolio</div>
+        <div class="detail">Contributions were never taxed, so every dollar withdrawn is taxed as income at ${taxRatePct}%</div>
+        <div class="detail">Est. ${fmt(byTax.pretax.tax)}/mo in tax</div>
       </div>
       <div class="tax-group">
         <h3 style="color: var(--clr-roth)">Roth / Post-tax</h3>
-        <div class="amount">${fmt(groups.roth)}</div>
-        <div class="detail">${total > 0 ? ((groups.roth / total) * 100).toFixed(1) : 0}% of portfolio</div>
-        <div class="detail">Tax-free withdrawals</div>
+        <div class="amount">${fmt(byTax.roth.balance)}</div>
+        <div class="detail">${pct(byTax.roth.balance)}% of portfolio</div>
+        <div class="detail">Already taxed going in — withdrawals are tax-free</div>
+        <div class="detail">Est. $0/mo in tax</div>
       </div>
       <div class="tax-group">
         <h3 style="color: var(--clr-taxable)">Taxable</h3>
-        <div class="amount">${fmt(groups.taxable)}</div>
-        <div class="detail">${total > 0 ? ((groups.taxable / total) * 100).toFixed(1) : 0}% of portfolio</div>
-        <div class="detail">Est. 15% on ~50% gains</div>
+        <div class="amount">${fmt(byTax.taxable.balance)}</div>
+        <div class="detail">${pct(byTax.taxable.balance)}% of portfolio</div>
+        <div class="detail">Est. ${(CAP_GAINS_RATE * 100).toFixed(0)}% on ~${(TAXABLE_GAIN_FRACTION * 100).toFixed(0)}% gains</div>
+        <div class="detail">Est. ${fmt(byTax.taxable.tax)}/mo in tax</div>
       </div>
       <div class="tax-group tax-impact">
         <h3>Monthly Tax Impact</h3>
-        <div class="amount">${fmt(afterTaxIncome)} <span style="font-size:0.75rem;font-weight:400;color:var(--clr-text-muted)">/ month after tax</span></div>
-        <div class="detail">Estimated monthly taxes: ${fmt(totalTax)}</div>
-        <div class="detail">Includes Social Security: ${ssActive ? fmt(ssMonthly) : "not yet started"}</div>
+        <div class="amount">${fmt(income.netMonthly)} <span style="font-size:0.75rem;font-weight:400;color:var(--clr-text-muted)">/ month after tax</span></div>
+        <div class="detail">Gross withdrawal ${fmt(income.grossMonthly)} &minus; tax ${fmt(income.taxMonthly)}</div>
+        <div class="detail">${sourceLine}</div>
+        <div class="detail">${ssLine}</div>
+        <div class="detail tax-note">Today's dollars, assuming the portfolio keeps earning and is drawn down to zero by age ${cfg.lifeExp}</div>
       </div>
     `;
   }
@@ -1044,16 +1283,18 @@
             el[key].value = data.globals[key];
           }
         });
+        GLOBAL_CHECKBOXES.forEach((key) => {
+          el[key].checked = !!data.globals[key];
+        });
         // Clear existing accounts
         accounts = [];
         el.accountsList.innerHTML = "";
         // Restore accounts
         nextId = data.nextId || 1;
-        data.accounts.forEach((acc) => {
-          accounts.push(normalizeAccount(acc));
-          renderAccount(acc);
-        });
+        data.accounts.forEach((acc) => accounts.push(normalizeAccount(acc)));
+        renderAccountsList();
         updateStrategyVisibility();
+        applyReturnOverrideToCards();
         recalculate();
         saveState();
       } catch (err) {
@@ -1085,6 +1326,10 @@
 
   el.runMcBtn.addEventListener("click", runMonteCarlo);
 
+  [el.globalReturnEnabled, el.globalReturn].forEach((input) => {
+    input.addEventListener("input", applyReturnOverrideToCards);
+  });
+
   // Trial count lives outside the input panel, so it needs its own save hook
   el.mcTrials.addEventListener("change", saveState);
 
@@ -1104,6 +1349,7 @@
     addAccount("401k");
   }
   updateStrategyVisibility();
+  applyReturnOverrideToCards();
   recalculate();
   renderMonteCarlo();
 })();

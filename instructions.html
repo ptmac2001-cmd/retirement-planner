@@ -60,11 +60,20 @@
     <li><strong>Current Balance</strong> — What you have in the account today.</li>
     <li><strong>Monthly Contribution</strong> — How much you add each month.</li>
     <li><strong>Employer Match</strong> — Only shown for pre-tax accounts. Enter the match percentage and the salary cap it applies to.</li>
-    <li><strong>Annual Return</strong> — Expected yearly growth rate (default: 7%). This rate is used both before and during retirement.</li>
+    <li><strong>Annual Return</strong> — Expected yearly growth rate (default: 7%). This rate is used both before and during retirement. It is ignored while the global return override in General Settings is switched on.</li>
     <li><strong>Volatility</strong> — How much this account's return varies year to year, as an annual standard deviation (default: 15%). Used <em>only</em> by the Monte Carlo simulation; the main projection ignores it. A broad stock fund is roughly 15&ndash;18%, a bond fund roughly 5&ndash;7%, and cash close to 0%.</li>
   </ul>
   <p>Click an account header to collapse/expand it. Click the <strong>&times;</strong> to remove it.</p>
-  <p>Account names matter for the year-by-year table. Accounts whose names start with "Peter" are grouped into a Peter Total column, and accounts starting with "Lisa" into a Lisa Total column.</p>
+
+  <h3>Naming and Owners</h3>
+  <p>Every account has an <strong>Account Name</strong> you can edit freely. Adding several accounts from the same template numbers them automatically ("401(k)", "401(k) 2", "401(k) 3") so they stay distinguishable in the header, the chart legend, and the table — rename them to whatever you like.</p>
+  <p>The <strong>Owner</strong> field says whose account it is. Type a name, or pick one you have already used from the dropdown. Once two or more owners exist:</p>
+  <ul>
+    <li>Accounts are grouped by owner in the sidebar, under a heading for each person.</li>
+    <li>The year-by-year table gains a subtotal column per owner &mdash; a "Peter Total" and a "Lisa Total", for instance.</li>
+    <li>The chart legend prefixes each account with its owner.</li>
+  </ul>
+  <p>Leaving Owner blank files the account under "Unassigned". With only one owner (or none), the per-owner column is skipped, since it would just repeat the grand total. New accounts inherit the owner of the account you added last.</p>
 
   <h3>General Settings</h3>
   <ul>
@@ -73,6 +82,7 @@
     <li><strong>Social Security Start Age</strong> — When benefits begin (default: 67).</li>
     <li><strong>Effective Tax Rate in Retirement</strong> — Applied to pre-tax withdrawals (default: 20%).</li>
     <li><strong>Asset Correlation</strong> — How closely your accounts move together in the Monte Carlo simulation (default: 70%). At 0% each account has an independent good or bad year; at 100% they all rise and fall together. Used only by the simulation.</li>
+    <li><strong>Override every account's annual return</strong> — Tick this and every account uses the single <strong>Global Annual Return</strong> rate instead of its own, in both the projection and the Monte Carlo simulation. It is the quick way to ask "what if everything returned 5%?" without editing each account. Each account's own rate is remembered, not erased: its input greys out while the override is on and comes back untouched when you switch it off.</li>
   </ul>
 
   <h2>Output Panel</h2>
@@ -82,7 +92,7 @@
   <ul>
     <li><strong>Total at Retirement</strong> — Combined balance across all accounts.</li>
     <li><strong>Inflation-Adjusted</strong> — That total in today's dollars.</li>
-    <li><strong>Monthly Income (After Tax)</strong> — Estimated monthly income from savings + Social Security.</li>
+    <li><strong>Monthly Income (After Tax, Today's $)</strong> — Sustainable monthly income from savings + Social Security, net of tax, expressed in today's purchasing power. See A8.</li>
     <li><strong>Years of Coverage</strong> — How many years your savings can fund your expenses.</li>
   </ul>
 
@@ -104,16 +114,23 @@
 
   <h3>Tax Breakdown</h3>
   <p>Shows how your retirement savings split across tax treatments and the estimated monthly tax impact on your income.</p>
+  <div class="example">
+    <p><strong>"Everything I have is pre-tax — why is there a tax bill?"</strong></p>
+    <p>Because that is what pre-tax means. A 401(k) or Traditional IRA contribution is deducted from your income in the year you make it, so the tax was <em>deferred</em>, not avoided. It comes due when you withdraw, and the whole withdrawal counts as ordinary income at your <strong>Effective Tax Rate in Retirement</strong>. A portfolio that is 100% pre-tax is therefore 100% taxable on the way out, and the Monthly Tax Impact card is correct to show one.</p>
+    <p>The accounts that produce no withdrawal tax are Roth / post-tax ones — you already paid the tax going in. Set an account's Tax Treatment to <em>Roth / Post-tax</em> and watch its share of the tax bill drop to $0.</p>
+  </div>
+  <p>The <strong>Monthly Tax Impact</strong> card reports sustainable monthly income <em>in today's dollars</em>, assuming your portfolio keeps earning its return through retirement and is drawn down to zero at your life expectancy. It breaks out the gross withdrawal, the tax taken from it, and what is left for you.</p>
 
   <h3>Year-by-Year Table</h3>
   <p>A scrollable table with the following columns:</p>
   <ul>
     <li><strong>Age</strong> — Each row represents the balance on your birthday that year.</li>
-    <li><strong>Peter Total / Lisa Total</strong> — Subtotals for accounts grouped by name prefix.</li>
+    <li><strong>&lt;Owner&gt; Total</strong> — One subtotal column per owner, shown when two or more owners exist.</li>
     <li><strong>Grand Total</strong> — All accounts combined.</li>
     <li><strong>Inf Adj Tot</strong> — Grand total expressed in today's dollars.</li>
     <li><strong>Withdrawals</strong> — The gross amount pulled from accounts that year (includes tax gross-ups — see Appendix).</li>
     <li><strong>Inf Adj Withdrawals</strong> — Withdrawals expressed in today's dollars.</li>
+    <li><strong>Est. Tax</strong> — The share of that year's gross withdrawal that goes to tax rather than to you.</li>
   </ul>
   <p>The retirement year row is highlighted in blue.</p>
 
@@ -188,7 +205,8 @@
   <code class="formula">Monthly withdrawal = (current balance &times; withdrawal %) / 12 &minus; Social Security</code>
 
   <h2>A4. Tax Gross-Up on Withdrawals</h2>
-  <p>The withdrawal amount you need is your <em>after-tax</em> spending money. But some accounts require you to pull out more than you need because taxes are owed on the withdrawal. This is called "grossing up."</p>
+  <p>Under the <strong>Fixed Monthly Amount</strong> strategy, the number you enter is your <em>after-tax</em> spending money. Some accounts require you to pull out more than that, because taxes are owed on the withdrawal. This is called "grossing up."</p>
+  <p>The <strong>4% Rule</strong> and <strong>Custom Percentage</strong> strategies work the other way round: they describe a share of your balance, which is already a gross withdrawal. Tax is taken <em>out of</em> that amount rather than added on top, so a 4% withdrawal stays 4% and your spending money is what is left after tax.</p>
 
   <h3>Pre-tax accounts (401(k), Traditional IRA)</h3>
   <p>Every dollar withdrawn is taxed at your effective tax rate. To net the amount you need, you must withdraw more:</p>
@@ -210,7 +228,7 @@
   </div>
 
   <h3>Why "Withdrawals" in the table may look higher than expected</h3>
-  <p>The Withdrawals column shows the <strong>gross</strong> amount pulled from all accounts — the actual dollars leaving your portfolio. This is higher than your spending need because it includes the extra pulled to cover taxes. The difference depends on your mix of pre-tax, Roth, and taxable accounts.</p>
+  <p>The Withdrawals column shows the <strong>gross</strong> amount pulled from all accounts — the actual dollars leaving your portfolio. Under the Fixed Monthly Amount strategy this is higher than your spending need because it includes the extra pulled to cover taxes. The difference depends on your mix of pre-tax, Roth, and taxable accounts, and the <strong>Est. Tax</strong> column next to it shows exactly how much of the withdrawal goes to tax.</p>
 
   <h2>A5. Proportional Withdrawals</h2>
   <p>When you have multiple accounts, the app doesn't drain one before moving to the next. Instead, it withdraws from each account in proportion to its current balance.</p>
@@ -235,6 +253,16 @@
   <p>Your accounts continue to earn returns during retirement at the same annual rate you set for each account. Each month, the balance grows by the monthly rate before the withdrawal is subtracted:</p>
   <code class="formula">Each month: New Balance = Old Balance &times; (1 + monthly rate) &minus; monthly withdrawal</code>
   <p>This means your portfolio can continue growing even during retirement if returns exceed withdrawals.</p>
+
+  <h3>Sustainable Monthly Income</h3>
+  <p>The <strong>Monthly Income (After Tax)</strong> card and the <strong>Monthly Tax Impact</strong> panel both answer the same question: if the portfolio keeps earning and is spent down to exactly zero at your life expectancy, what can it pay out each month?</p>
+  <p>That is an annuity payment, computed per account against a <em>real</em> return &mdash; its nominal return discounted for inflation &mdash; so the answer comes out in today's dollars:</p>
+  <code class="formula">real annual rate = (1 + annual return) / (1 + inflation) &minus; 1</code>
+  <code class="formula">monthly payment = balance &times; r / (1 &minus; (1 + r)<sup>&minus;n</sup>)&nbsp;&nbsp;&nbsp;where r = real annual rate / 12, n = months of retirement</code>
+  <p>Each account's payment is then reduced by the tax owed on its treatment (A4), and Social Security is added if it has started by your retirement age.</p>
+  <div class="example">
+    <p><strong>Why not just divide the balance by the number of months?</strong> Because that assumes your portfolio stops growing the moment you retire, which contradicts everything else on the page &mdash; the projection chart and the year-by-year table both keep it earning. On a 25-year retirement the difference is large: $3.6M at a 10% return with 3% inflation supports about $25,000/month gross, not the $12,000 that dividing by 300 would suggest.</p>
+  </div>
 
   <h2>A9. Monte Carlo Simulation</h2>
   <p>The simulation runs the exact same projection engine described above, with one change: instead of every account earning its expected return every year, each year's return is drawn at random.</p>
