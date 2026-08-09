@@ -1,0 +1,1516 @@
+<title>Retirement Planner — Three Design Directions</title>
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   SHOWROOM CHROME — neutral, theme-aware. Each stage below paints
+   its own committed world and is namespaced under .stage[data-v].
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --chrome-bg: #ffffff;
+  --chrome-panel: #f4f4f6;
+  --chrome-line: #dedee4;
+  --chrome-ink: #17171c;
+  --chrome-ink-dim: #6a6a78;
+  --chrome-active: #17171c;
+  --chrome-active-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --chrome-bg: #131316;
+    --chrome-panel: #1d1d21;
+    --chrome-line: #2e2e35;
+    --chrome-ink: #f2f2f5;
+    --chrome-ink-dim: #9a9aa8;
+    --chrome-active: #f2f2f5;
+    --chrome-active-ink: #131316;
+  }
+}
+:root[data-theme="dark"] {
+  --chrome-bg: #131316;
+  --chrome-panel: #1d1d21;
+  --chrome-line: #2e2e35;
+  --chrome-ink: #f2f2f5;
+  --chrome-ink-dim: #9a9aa8;
+  --chrome-active: #f2f2f5;
+  --chrome-active-ink: #131316;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--chrome-bg);
+  color: var(--chrome-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.switcher {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--chrome-line);
+}
+.switcher-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--chrome-ink-dim);
+  margin-right: 0.4rem;
+}
+.tab {
+  appearance: none;
+  border: 1px solid var(--chrome-line);
+  background: var(--chrome-panel);
+  color: var(--chrome-ink);
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 0.42rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.tab:hover { border-color: var(--chrome-ink-dim); }
+.tab:focus-visible { outline: 2px solid #3D8BF0; outline-offset: 2px; }
+.tab[aria-selected="true"] {
+  background: var(--chrome-active);
+  color: var(--chrome-active-ink);
+  border-color: var(--chrome-active);
+}
+.tab .swatch {
+  width: 0.62rem; height: 0.62rem;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(128,128,128,0.35);
+}
+.switcher-note {
+  margin-left: auto;
+  font-size: 0.76rem;
+  color: var(--chrome-ink-dim);
+}
+
+.stage { display: none; }
+.stage.on { display: block; }
+
+/* ══════════════════════════════════════════════════════════════════
+   SHARED CHART PRIMITIVES (namespaced by stage; only geometry here)
+   ══════════════════════════════════════════════════════════════════ */
+.plot { position: relative; width: 100%; }
+.plot svg { display: block; width: 100%; height: auto; }
+.plot .hit { position: absolute; inset: 0; cursor: crosshair; }
+
+.tip {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 5;
+  min-width: 12.5rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.tip.on { opacity: 1; }
+.tip-age { font-weight: 700; margin-bottom: 0.35rem; letter-spacing: 0.02em; }
+.tip-row { display: flex; align-items: center; gap: 0.45rem; }
+.tip-row .k { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; }
+.tip-row .v { font-weight: 600; }
+.tip-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; flex: none; }
+.tip-rule { height: 1px; margin: 0.4rem 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ▌ STAGE 1 — OBSERVATORY
+     Dark navy instrument. The chart bleeds the full width with no
+     card around it; the readout strip sits on its lower band.
+   ══════════════════════════════════════════════════════════════════ */
+.v1 {
+  --bg:        #0A0F1C;
+  --panel:     #131A2B;
+  --panel-2:   #182136;
+  --line:      #222D45;
+  --line-soft: #1A2337;
+  --ink:       #E8EEF9;
+  --ink-2:     #A3B2CC;
+  --ink-3:     #6F7F9C;
+  --brass:     #F5B942;
+  --good:      #3FCF8E;
+  --crit:      #F2647C;
+  --s1: #3D8BF0; --s2: #D96A33; --s3: #17A67E; --s4: #8E78E8; --s5: #E45C78;
+  --f-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-data: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  min-height: 100vh;
+}
+.v1 .eyebrow {
+  font-family: var(--f-data);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.v1 .masthead {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1.15rem 1.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.v1 .masthead h1 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.v1 .masthead .who {
+  font-family: var(--f-data);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+.v1 .masthead .stamp {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--f-data);
+  font-size: 0.68rem;
+  color: var(--good);
+  letter-spacing: 0.06em;
+}
+.v1 .stamp .pip {
+  width: 0.4rem; height: 0.4rem; border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px rgba(63,207,142,0.16);
+}
+
+.v1 .frame { display: grid; grid-template-columns: 16.5rem 1fr; min-height: calc(100vh - 3.5rem); }
+.v1 .rail {
+  border-right: 1px solid var(--line);
+  padding: 1.1rem 1.1rem 2.5rem;
+  display: flex; flex-direction: column; gap: 1.4rem;
+}
+.v1 .rail-grp { display: flex; flex-direction: column; gap: 0.55rem; }
+.v1 .rail-grp > .eyebrow { margin-bottom: 0.15rem; }
+.v1 .fld { display: flex; flex-direction: column; gap: 0.28rem; }
+.v1 .fld label { font-size: 0.73rem; color: var(--ink-2); }
+.v1 .fld .ctl {
+  display: flex; align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.v1 .fld .ctl:focus-within { border-color: var(--brass); box-shadow: 0 0 0 3px rgba(245,185,66,0.14); }
+.v1 .fld .ctl .pre {
+  padding: 0 0.45rem;
+  font-family: var(--f-data); font-size: 0.76rem; color: var(--ink-3);
+  border-right: 1px solid var(--line-soft);
+  align-self: stretch; display: flex; align-items: center;
+}
+.v1 .fld input, .v1 .fld select {
+  flex: 1; min-width: 0;
+  background: transparent; border: 0; outline: none;
+  color: var(--ink);
+  font-family: var(--f-data); font-size: 0.82rem;
+  padding: 0.42rem 0.5rem;
+}
+.v1 .fld select { font-family: var(--f-ui); }
+.v1 .fld option { background: var(--panel); color: var(--ink); }
+
+.v1 .acct-owner {
+  font-family: var(--f-data);
+  font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 0.45rem;
+}
+.v1 .acct {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--sc);
+  border-radius: 4px;
+  margin-bottom: 0.35rem;
+}
+.v1 .acct .nm { font-size: 0.78rem; flex: 1; min-width: 0; }
+.v1 .acct .amt { font-family: var(--f-data); font-size: 0.76rem; color: var(--ink-2); }
+.v1 .acct .tag {
+  font-family: var(--f-data); font-size: 0.58rem; letter-spacing: 0.08em;
+  padding: 0.1rem 0.3rem; border-radius: 2px;
+  background: rgba(245,185,66,0.13); color: var(--brass);
+}
+.v1 .acct .tag.roth { background: rgba(63,207,142,0.13); color: var(--good); }
+.v1 .acct .tag.txbl { background: rgba(61,139,240,0.14); color: var(--s1); }
+
+.v1 .add {
+  appearance: none; width: 100%;
+  background: transparent; border: 1px dashed var(--line);
+  color: var(--ink-3); font: inherit; font-size: 0.75rem;
+  padding: 0.42rem; border-radius: 4px; cursor: pointer;
+}
+.v1 .add:hover { border-color: var(--brass); color: var(--brass); }
+.v1 .add:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.v1 .body { min-width: 0; display: flex; flex-direction: column; }
+
+/* Hero chart — full bleed, no card */
+.v1 .hero { position: relative; border-bottom: 1px solid var(--line); }
+.v1 .hero .plot { padding: 0.6rem 0 0; }
+.v1 .hero-head {
+  display: flex; align-items: flex-end; gap: 1.4rem;
+  padding: 1.15rem 1.6rem 0.2rem;
+}
+.v1 .hero-head .lede { min-width: 0; }
+.v1 .hero-head h2 {
+  margin: 0.3rem 0 0;
+  font-family: var(--f-data);
+  font-size: 2.9rem; font-weight: 500; letter-spacing: -0.035em;
+  color: var(--brass); line-height: 1;
+}
+.v1 .hero-head .sub { margin-top: 0.35rem; font-size: 0.78rem; color: var(--ink-2); }
+.v1 .legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; padding-bottom: 0.25rem; }
+.v1 .legend .li { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--ink-2); }
+.v1 .legend .sw { width: 0.85rem; height: 0.16rem; border-radius: 1px; }
+.v1 .legend .sw.band { height: 0.55rem; border-radius: 2px; opacity: 0.5; }
+
+/* Readout strip overlapping the chart's lower band */
+.v1 .readout {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(10,15,28,0) 0%, var(--bg) 42%);
+  margin-top: -3.4rem; position: relative; z-index: 2;
+}
+.v1 .ro { padding: 1rem 1.6rem 1.15rem; border-right: 1px solid var(--line-soft); }
+.v1 .ro:last-child { border-right: 0; }
+.v1 .ro .k { font-family: var(--f-data); font-size: 0.62rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); }
+.v1 .ro .v { font-family: var(--f-data); font-size: 1.42rem; margin-top: 0.3rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.v1 .ro .n { font-size: 0.71rem; color: var(--ink-3); margin-top: 0.18rem; }
+.v1 .ro .v.good { color: var(--good); }
+
+.v1 .lower { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
+.v1 .card { background: var(--bg); padding: 1.25rem 1.6rem 1.5rem; min-width: 0; }
+.v1 .card h3 { margin: 0 0 0.9rem; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.01em; }
+
+.v1 .bars { display: flex; flex-direction: column; gap: 0.75rem; }
+.v1 .bar-row .top { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.76rem; }
+.v1 .bar-row .top .amt { margin-left: auto; font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.v1 .bar-row .top .pc { font-family: var(--f-data); font-size: 0.7rem; color: var(--ink-3); width: 3rem; text-align: right; }
+.v1 .track { height: 0.5rem; background: var(--panel); border-radius: 3px; margin-top: 0.3rem; overflow: hidden; }
+.v1 .track i { display: block; height: 100%; border-radius: 3px; }
+.v1 .taxnote { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--line-soft); font-size: 0.75rem; color: var(--ink-2); line-height: 1.55; }
+.v1 .taxnote b { color: var(--brass); font-weight: 600; }
+
+.v1 .tbl-wrap { overflow-x: auto; }
+.v1 table { width: 100%; border-collapse: collapse; font-family: var(--f-data); font-size: 0.73rem; font-variant-numeric: tabular-nums; }
+.v1 th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0 0.55rem 0.5rem; white-space: nowrap; }
+.v1 th:first-child, .v1 td:first-child { text-align: left; padding-left: 0; }
+.v1 td { text-align: right; padding: 0.4rem 0.55rem; border-top: 1px solid var(--line-soft); white-space: nowrap; }
+.v1 tr.mark td { color: var(--brass); }
+.v1 tr.mark td:first-child::after { content: " ◄ retires"; font-size: 0.6rem; letter-spacing: 0.08em; color: var(--ink-3); }
+
+.v1 .tip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; font-family: var(--f-data); color: var(--ink); box-shadow: 0 12px 32px -12px rgba(0,0,0,0.8); }
+.v1 .tip-rule { background: var(--line); }
+.v1 .tip-row .k { color: var(--ink-2); }
+
+/* ══════════════════════════════════════════════════════════════════
+   ▌ STAGE 2 — LEDGER
+     Engraved statement on ledger-sage paper. Serif numerals,
+     hairline rules, the chart as a printed plate.
+   ══════════════════════════════════════════════════════════════════ */
+.v2 {
+  --bg:     #E7ECE6;
+  --plate:  #FBFCFA;
+  --plate-2:#F2F5F0;
+  --rule:   #C6D0C3;
+  --rule-2: #DDE4DA;
+  --ink:    #16211C;
+  --ink-2:  #4E5C53;
+  --ink-3:  #7C8A81;
+  --ox:     #8E2B36;
+  --brass:  #8A6D22;
+  --s1: #1F5FA8; --s2: #D17420; --s3: #157F5C; --s4: #6B3FA0; --s5: #A32A3A;
+  --f-disp: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --f-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  min-height: 100vh;
+  padding: 1.6rem 1.4rem 3rem;
+}
+.v2 .sheet { max-width: 76rem; margin: 0 auto; }
+
+.v2 .masthead {
+  display: flex; align-items: flex-end; gap: 1.2rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 2px solid var(--ink);
+}
+.v2 .masthead h1 {
+  margin: 0;
+  font-family: var(--f-disp);
+  font-size: 1.75rem; font-weight: 400; letter-spacing: -0.015em;
+}
+.v2 .masthead .rule-sub {
+  font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3); padding-bottom: 0.3rem;
+}
+.v2 .masthead .filed {
+  margin-left: auto; text-align: right;
+  font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+  padding-bottom: 0.3rem;
+}
+.v2 .masthead .filed b { display: block; font-family: var(--f-disp); font-size: 0.95rem; letter-spacing: 0; text-transform: none; color: var(--ink); font-weight: 400; }
+
+.v2 .frame { display: grid; grid-template-columns: 15rem 1fr; gap: 1.6rem; margin-top: 1.3rem; align-items: start; }
+
+.v2 .form { display: flex; flex-direction: column; gap: 1.3rem; }
+.v2 .form h4 {
+  margin: 0 0 0.55rem;
+  font-size: 0.64rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3);
+  padding-bottom: 0.3rem; border-bottom: 1px solid var(--rule);
+}
+.v2 .fld { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.5rem; padding: 0.28rem 0; }
+.v2 .fld label { font-size: 0.78rem; color: var(--ink-2); }
+.v2 .fld input, .v2 .fld select {
+  width: 6.2rem; text-align: right;
+  background: transparent;
+  border: 0; border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--f-disp); font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.2rem;
+  outline: none;
+}
+.v2 .fld select { width: 8rem; font-family: var(--f-ui); font-size: 0.78rem; text-align: left; }
+.v2 .fld input:focus, .v2 .fld select:focus { border-bottom-color: var(--ox); box-shadow: 0 1px 0 0 var(--ox); }
+
+.v2 .acct-owner {
+  font-family: var(--f-disp); font-size: 0.95rem; font-style: italic;
+  color: var(--ink); margin: 0.7rem 0 0.35rem;
+}
+.v2 .acct {
+  display: grid; grid-template-columns: 0.6rem 1fr auto; align-items: center; gap: 0.5rem;
+  padding: 0.38rem 0; border-bottom: 1px dotted var(--rule);
+  font-size: 0.78rem;
+}
+.v2 .acct .sw { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--sc); }
+.v2 .acct .amt { font-family: var(--f-disp); font-variant-numeric: tabular-nums; }
+.v2 .acct .nm small { display: block; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.v2 .add {
+  appearance: none; margin-top: 0.6rem;
+  background: transparent; border: 1px solid var(--ink); color: var(--ink);
+  font: inherit; font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase;
+  padding: 0.4rem 0.7rem; cursor: pointer;
+}
+.v2 .add:hover { background: var(--ink); color: var(--plate); }
+.v2 .add:focus-visible { outline: 2px solid var(--ox); outline-offset: 2px; }
+
+.v2 .col { min-width: 0; display: flex; flex-direction: column; gap: 1.4rem; }
+
+.v2 .plate {
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  padding: 1.2rem 1.3rem 1.3rem;
+}
+.v2 .plate > header { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.v2 .plate > header h3 {
+  margin: 0; font-family: var(--f-disp); font-size: 1.05rem; font-weight: 400;
+}
+.v2 .plate > header .cap { white-space: nowrap; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.v2 .legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 0.3rem 0.85rem; }
+.v2 .legend .li { display: flex; align-items: center; gap: 0.38rem; font-size: 0.71rem; color: var(--ink-2); }
+.v2 .legend .sw { width: 0.85rem; height: 0.14rem; }
+.v2 .legend .sw.band { height: 0.5rem; opacity: 0.45; }
+
+.v2 .figures { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); margin-top: 0.9rem; }
+.v2 .fig { padding: 0.85rem 0.9rem 0.2rem; border-right: 1px solid var(--rule-2); }
+.v2 .fig:first-child { padding-left: 0; }
+.v2 .fig:last-child { border-right: 0; }
+.v2 .fig .k { font-size: 0.63rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); }
+.v2 .fig .v { font-family: var(--f-disp); font-size: 1.55rem; margin-top: 0.15rem; font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
+.v2 .fig .n { font-size: 0.68rem; color: var(--ink-3); margin-top: 0.1rem; }
+.v2 .fig .v.ox { color: var(--ox); }
+
+.v2 .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+.v2 .ledger-rows { display: flex; flex-direction: column; }
+.v2 .lr { display: grid; grid-template-columns: 1fr auto auto; gap: 0.7rem; align-items: baseline; padding: 0.55rem 0; border-bottom: 1px solid var(--rule-2); }
+.v2 .lr:last-child { border-bottom: 0; }
+.v2 .lr .nm { font-size: 0.82rem; display: flex; align-items: center; gap: 0.45rem; }
+.v2 .lr .nm .sw { width: 0.55rem; height: 0.55rem; border-radius: 50%; }
+.v2 .lr .amt { font-family: var(--f-disp); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.v2 .lr .tax { font-family: var(--f-disp); font-size: 0.88rem; color: var(--ox); font-variant-numeric: tabular-nums; width: 5.2rem; text-align: right; }
+.v2 .lr.head { border-bottom: 1px solid var(--rule); padding-bottom: 0.35rem; }
+.v2 .lr.head span { font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); font-family: var(--f-ui); }
+.v2 .lr.total { border-top: 2px solid var(--ink); border-bottom: 0; margin-top: 0.25rem; padding-top: 0.55rem; }
+.v2 .note { margin-top: 0.9rem; font-size: 0.76rem; line-height: 1.6; color: var(--ink-2); }
+.v2 .note b { color: var(--ox); font-weight: 600; }
+
+.v2 .tbl-wrap { overflow-x: auto; }
+.v2 table { width: 100%; border-collapse: collapse; font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+.v2 th { font-family: var(--f-ui); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); text-align: right; padding: 0 0.6rem 0.45rem; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+.v2 th:first-child, .v2 td:first-child { text-align: left; padding-left: 0; }
+.v2 td { font-family: var(--f-disp); text-align: right; padding: 0.36rem 0.6rem; border-bottom: 1px solid var(--rule-2); white-space: nowrap; }
+.v2 tr.mark td { background: rgba(142,43,54,0.06); color: var(--ox); }
+.v2 tr.mark td:first-child { font-style: italic; }
+
+.v2 .tip { background: var(--plate); border: 1px solid var(--ink); color: var(--ink); box-shadow: 3px 3px 0 rgba(22,33,28,0.12); }
+.v2 .tip-age { font-family: var(--f-disp); font-weight: 400; font-size: 0.9rem; }
+.v2 .tip-rule { background: var(--rule); }
+.v2 .tip-row .v { font-family: var(--f-disp); }
+
+/* ══════════════════════════════════════════════════════════════════
+   ▌ STAGE 3 — HORIZON
+     Cool ground, warm dawn gradient reserved for the chart and one
+     accent. Oversized figures, generous rounding.
+   ══════════════════════════════════════════════════════════════════ */
+.v3 {
+  --bg:     #F1F3F9;
+  --card:   #FFFFFF;
+  --line:   #E2E5EF;
+  --ink:    #181A2E;
+  --ink-2:  #545A78;
+  --ink-3:  #878DA8;
+  --dawn-1: #FFB05C;
+  --dawn-2: #FF7A5C;
+  --dawn-3: #E4426E;
+  --good:   #0FA37F;
+  --s1: #2F6BE0; --s2: #DC6220; --s3: #0FA37F; --s4: #8B5CF6; --s5: #E4426E;
+  --f-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  min-height: 100vh;
+  padding: 1.5rem 1.4rem 3rem;
+}
+.v3 .sheet { max-width: 80rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.1rem; }
+
+.v3 .masthead { display: flex; align-items: center; gap: 1rem; }
+.v3 .masthead h1 { margin: 0; font-size: 1.28rem; font-weight: 800; letter-spacing: -0.03em; }
+.v3 .masthead .who {
+  font-size: 0.76rem; color: var(--ink-2);
+  background: var(--card); border: 1px solid var(--line);
+  padding: 0.3rem 0.7rem; border-radius: 999px;
+}
+.v3 .masthead .cta {
+  margin-left: auto;
+  appearance: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 0.82rem; font-weight: 700; color: #fff;
+  padding: 0.55rem 1.15rem; border-radius: 999px;
+  background: linear-gradient(96deg, var(--dawn-1), var(--dawn-2) 52%, var(--dawn-3));
+  box-shadow: 0 8px 20px -8px rgba(228,66,110,0.55);
+}
+.v3 .masthead .cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.v3 .tiles { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 0.85rem; }
+.v3 .tile {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 16px; padding: 1.05rem 1.15rem 1.15rem;
+  min-width: 0;
+}
+.v3 .tile .k { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; color: var(--ink-3); text-transform: uppercase; }
+.v3 .tile .v { font-size: 2.15rem; font-weight: 800; letter-spacing: -0.045em; margin-top: 0.3rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.v3 .tile .n { font-size: 0.75rem; color: var(--ink-2); margin-top: 0.45rem; }
+.v3 .tile.lead { background: linear-gradient(140deg, #1F2136, #2B2450 55%, #4A2B4E); border-color: transparent; color: #fff; }
+.v3 .tile.lead .k { color: rgba(255,255,255,0.62); }
+.v3 .tile.lead .v { font-size: 2.65rem; background: linear-gradient(96deg, var(--dawn-1), var(--dawn-2) 55%, #FF9BB4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.v3 .tile.lead .n { color: rgba(255,255,255,0.72); }
+.v3 .tile .chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.72rem; font-weight: 700; margin-top: 0.5rem;
+  padding: 0.2rem 0.55rem; border-radius: 999px;
+  background: rgba(15,163,127,0.12); color: var(--good);
+}
+.v3 .tile .chip .pip { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: currentColor; }
+
+.v3 .split { display: grid; grid-template-columns: 1fr 17.5rem; gap: 1.1rem; align-items: start; }
+
+.v3 .chartcard {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 20px; padding: 1.2rem 1.3rem 0.9rem;
+  min-width: 0;
+}
+.v3 .chartcard > header { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+.v3 .chartcard h3 { margin: 0; font-size: 0.98rem; font-weight: 700; letter-spacing: -0.015em; }
+.v3 .seg { display: flex; gap: 0.15rem; background: var(--bg); padding: 0.2rem; border-radius: 999px; }
+.v3 .seg button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--ink-2);
+  padding: 0.28rem 0.7rem; border-radius: 999px;
+}
+.v3 .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(24,26,46,0.12); }
+.v3 .seg button:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+.v3 .legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 0.3rem 0.85rem; }
+.v3 .legend .li { display: flex; align-items: center; gap: 0.4rem; font-size: 0.73rem; color: var(--ink-2); }
+.v3 .legend .sw { width: 0.85rem; height: 0.19rem; border-radius: 2px; }
+.v3 .legend .sw.band { height: 0.6rem; border-radius: 3px; opacity: 0.5; }
+
+.v3 .side { display: flex; flex-direction: column; gap: 0.85rem; }
+.v3 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.05rem 1.1rem; }
+.v3 .panel h4 { margin: 0 0 0.7rem; font-size: 0.8rem; font-weight: 700; }
+.v3 .fld { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.6rem; }
+.v3 .fld label { font-size: 0.72rem; font-weight: 600; color: var(--ink-2); }
+.v3 .fld .ctl { display: flex; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.v3 .fld .ctl:focus-within { border-color: var(--s1); box-shadow: 0 0 0 3px rgba(47,107,224,0.14); }
+.v3 .fld .ctl .pre { padding: 0 0.5rem; font-size: 0.8rem; color: var(--ink-3); }
+.v3 .fld input, .v3 .fld select {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: none;
+  font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--ink);
+  padding: 0.45rem 0.55rem; font-variant-numeric: tabular-nums;
+}
+.v3 .acct-owner {
+  display: flex; align-items: center; gap: 0.45rem;
+  font-size: 0.72rem; font-weight: 700; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin: 0.75rem 0 0.4rem;
+}
+.v3 .acct-owner::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.v3 .acct {
+  display: flex; align-items: center; gap: 0.55rem;
+  background: var(--bg); border-radius: 11px; padding: 0.5rem 0.65rem; margin-bottom: 0.35rem;
+}
+.v3 .acct .sw { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--sc); flex: none; }
+.v3 .acct .nm { font-size: 0.78rem; font-weight: 600; flex: 1; min-width: 0; }
+.v3 .acct .amt { font-size: 0.76rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.v3 .add {
+  appearance: none; width: 100%; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 11px;
+  font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--ink-2);
+  padding: 0.5rem;
+}
+.v3 .add:hover { border-color: var(--s1); color: var(--s1); }
+.v3 .add:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+.v3 .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+.v3 .donut-row { display: flex; align-items: center; gap: 1.2rem; }
+.v3 .donut { flex: none; }
+.v3 .dlegend { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.v3 .dl { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.79rem; }
+.v3 .dl .sw { width: 0.6rem; height: 0.6rem; border-radius: 3px; flex: none; align-self: center; }
+.v3 .dl .nm { flex: 1; min-width: 0; }
+.v3 .dl .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+.v3 .dl .tax { font-size: 0.72rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.v3 .note { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--line); font-size: 0.77rem; line-height: 1.6; color: var(--ink-2); }
+.v3 .note b { color: var(--ink); font-weight: 700; }
+
+.v3 .tbl-wrap { overflow-x: auto; }
+.v3 table { width: 100%; border-collapse: collapse; font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+.v3 th { text-align: right; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 0 0.6rem 0.5rem; white-space: nowrap; }
+.v3 th:first-child, .v3 td:first-child { text-align: left; padding-left: 0; }
+.v3 td { text-align: right; padding: 0.42rem 0.6rem; border-top: 1px solid var(--line); white-space: nowrap; }
+.v3 tr.mark td { background: linear-gradient(90deg, rgba(255,176,92,0.16), rgba(228,66,110,0.08)); font-weight: 700; }
+
+.v3 .tip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); box-shadow: 0 16px 36px -14px rgba(24,26,46,0.35); }
+.v3 .tip-rule { background: var(--line); }
+.v3 .tip-row .k { color: var(--ink-2); }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .v1 .frame { grid-template-columns: 1fr; }
+  .v1 .rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .v1 .lower { grid-template-columns: 1fr; }
+  .v1 .readout { grid-template-columns: repeat(2, 1fr); margin-top: 0; }
+  .v1 .ro { border-bottom: 1px solid var(--line-soft); }
+  .v2 .frame { grid-template-columns: 1fr; }
+  .v2 .duo { grid-template-columns: 1fr; }
+  .v2 .figures { grid-template-columns: repeat(2, 1fr); }
+  .v3 .split { grid-template-columns: 1fr; }
+  .v3 .tiles { grid-template-columns: repeat(2, 1fr); }
+  .v3 .duo { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .v1 .hero-head { flex-direction: column; align-items: flex-start; gap: 0.7rem; }
+  .v1 .legend { margin-left: 0; }
+  .v2 .figures { grid-template-columns: 1fr; }
+  .v3 .tiles { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="switcher" role="tablist" aria-label="Design directions">
+  <span class="switcher-title">Direction</span>
+  <button class="tab" role="tab" aria-selected="true" aria-controls="v1" id="t1">
+    <span class="swatch" style="background:#F5B942"></span>1 · Observatory
+  </button>
+  <button class="tab" role="tab" aria-selected="false" aria-controls="v2" id="t2">
+    <span class="swatch" style="background:#8E2B36"></span>2 · Ledger
+  </button>
+  <button class="tab" role="tab" aria-selected="false" aria-controls="v3" id="t3">
+    <span class="swatch" style="background:linear-gradient(120deg,#FFB05C,#E4426E)"></span>3 · Horizon
+  </button>
+  <span class="switcher-note">Same data in all three · hover the chart</span>
+</div>
+
+<!-- ═══════════════════ 1 · OBSERVATORY ═══════════════════ -->
+<section class="stage v1 on" id="v1" role="tabpanel" aria-labelledby="t1">
+  <div class="masthead">
+    <h1>Retirement Planner</h1>
+    <span class="who">SAMPLE HOUSEHOLD · AGE 50 → 90</span>
+    <span class="stamp" id="v1-stamp"><span class="pip"></span><span></span></span>
+  </div>
+
+  <div class="frame">
+    <aside class="rail">
+      <div class="rail-grp">
+        <div class="eyebrow">Horizon</div>
+        <div class="fld"><label for="v1-dob">Date of birth</label>
+          <div class="ctl"><input id="v1-dob" type="text" value="1980-01-01"></div></div>
+        <div class="fld"><label for="v1-ret">Retirement age</label>
+          <div class="ctl"><input id="v1-ret" type="text" value="65"></div></div>
+        <div class="fld"><label for="v1-life">Life expectancy</label>
+          <div class="ctl"><input id="v1-life" type="text" value="90"></div></div>
+      </div>
+
+      <div class="rail-grp">
+        <div class="eyebrow">Drawdown</div>
+        <div class="fld"><label for="v1-strat">Strategy</label>
+          <div class="ctl"><select id="v1-strat"><option>Fixed monthly amount</option><option>4% rule</option><option>Custom percentage</option></select></div></div>
+        <div class="fld"><label for="v1-exp">Monthly expenses</label>
+          <div class="ctl"><span class="pre">$</span><input id="v1-exp" type="text" value="11,000"></div></div>
+        <div class="fld"><label for="v1-tax">Effective tax rate</label>
+          <div class="ctl"><input id="v1-tax" type="text" value="20"><span class="pre" style="border:0;border-left:1px solid var(--line-soft)">%</span></div></div>
+      </div>
+
+      <div class="rail-grp">
+        <div class="eyebrow">Accounts</div>
+        <div>
+          <div class="acct-owner">Owner A</div>
+          <div class="acct" style="--sc:#3D8BF0"><span class="nm">401(k)</span><span class="tag">PRE</span><span class="amt">$420k</span></div>
+          <div class="acct" style="--sc:#D96A33"><span class="nm">Roth IRA</span><span class="tag roth">ROTH</span><span class="amt">$185k</span></div>
+          <div class="acct-owner">Owner B</div>
+          <div class="acct" style="--sc:#17A67E"><span class="nm">401(k)</span><span class="tag">PRE</span><span class="amt">$310k</span></div>
+          <div class="acct" style="--sc:#8E78E8"><span class="nm">Brokerage</span><span class="tag txbl">TAX</span><span class="amt">$145k</span></div>
+        </div>
+        <button class="add" type="button">+ Add account</button>
+      </div>
+    </aside>
+
+    <div class="body">
+      <div class="hero">
+        <div class="hero-head">
+          <div class="lede">
+            <div class="eyebrow">At age 65 · today's dollars</div>
+            <h2 id="v1-hero">$0</h2>
+            <div class="sub">What the portfolio is worth in money you can spend today</div>
+          </div>
+          <div class="legend" id="v1-legend"></div>
+        </div>
+        <div class="plot" data-plot="1">
+          <svg viewBox="0 0 1200 460" preserveAspectRatio="xMidYMid meet" role="img"
+               aria-label="Portfolio balance by age in today's dollars, with the simulated 25th-to-75th percentile range"></svg>
+          <div class="hit"></div>
+          <div class="tip"></div>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="ro"><div class="k">At retirement</div><div class="v" id="v1-r1">—</div><div class="n">Today's dollars, all accounts</div></div>
+        <div class="ro"><div class="k">Nominal at 65</div><div class="v" id="v1-r2">—</div><div class="n">Before 3% inflation discount</div></div>
+        <div class="ro"><div class="k">Monthly, after tax</div><div class="v" id="v1-r3">—</div><div class="n">Today's $, sustainable to 90</div></div>
+        <div class="ro"><div class="k">Simulated success</div><div class="v good" id="v1-mc">—</div><div class="n" id="v1-mcn">&nbsp;</div></div>
+      </div>
+
+      <div class="lower">
+        <div class="card">
+          <h3>Where the tax lands</h3>
+          <div class="bars" id="v1-bars"></div>
+          <div class="taxnote">
+            Pre-tax balances are taxed as ordinary income on withdrawal — the deduction you took
+            going in comes due here. At a 20% effective rate that is <b id="v1-taxmo">—</b> a month
+            off the top before anything reaches you.
+          </div>
+        </div>
+        <div class="card">
+          <h3>Year by year</h3>
+          <div class="tbl-wrap"><table id="v1-tbl"></table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ 2 · LEDGER ═══════════════════ -->
+<section class="stage v2" id="v2" role="tabpanel" aria-labelledby="t2" hidden>
+  <div class="sheet">
+    <div class="masthead">
+      <h1>Retirement Planner</h1>
+      <span class="rule-sub">Projection</span>
+      <span class="filed">Prepared for<b>Sample household</b></span>
+    </div>
+
+    <div class="frame">
+      <aside class="form">
+        <div>
+          <h4>Horizon</h4>
+          <div class="fld"><label for="v2-dob">Date of birth</label><input id="v2-dob" type="text" value="1980-01-01"></div>
+          <div class="fld"><label for="v2-ret">Retirement age</label><input id="v2-ret" type="text" value="65"></div>
+          <div class="fld"><label for="v2-life">Life expectancy</label><input id="v2-life" type="text" value="90"></div>
+        </div>
+        <div>
+          <h4>Drawdown</h4>
+          <div class="fld"><label for="v2-strat">Strategy</label><select id="v2-strat"><option>Fixed monthly</option><option>4% rule</option><option>Custom %</option></select></div>
+          <div class="fld"><label for="v2-exp">Monthly expenses</label><input id="v2-exp" type="text" value="11,000"></div>
+          <div class="fld"><label for="v2-taxrate">Tax rate</label><input id="v2-taxrate" type="text" value="20%"></div>
+          <div class="fld"><label for="v2-inf">Inflation</label><input id="v2-inf" type="text" value="3%"></div>
+        </div>
+        <div>
+          <h4>Accounts</h4>
+          <div class="acct-owner">Owner A</div>
+          <div class="acct" style="--sc:#1F5FA8"><span class="sw"></span><span class="nm">401(k)<small>Pre-tax</small></span><span class="amt">$400,000</span></div>
+          <div class="acct" style="--sc:#D17420"><span class="sw"></span><span class="nm">Roth IRA<small>Post-tax</small></span><span class="amt">$200,000</span></div>
+          <div class="acct-owner">Owner B</div>
+          <div class="acct" style="--sc:#157F5C"><span class="sw"></span><span class="nm">401(k)<small>Pre-tax</small></span><span class="amt">$300,000</span></div>
+          <div class="acct" style="--sc:#6B3FA0"><span class="sw"></span><span class="nm">Brokerage<small>Taxable</small></span><span class="amt">$150,000</span></div>
+          <button class="add" type="button">Add account</button>
+        </div>
+      </aside>
+
+      <div class="col">
+        <div class="plate">
+          <header>
+            <h3>Portfolio through life expectancy</h3>
+            <span class="cap">Fig. 1 · today's dollars</span>
+            <div class="legend" id="v2-legend"></div>
+          </header>
+          <div class="plot" data-plot="2">
+            <svg viewBox="0 0 1200 430" preserveAspectRatio="xMidYMid meet" role="img"
+                 aria-label="Portfolio balance by age in today's dollars, with the simulated 25th-to-75th percentile range"></svg>
+            <div class="hit"></div>
+            <div class="tip"></div>
+          </div>
+          <div class="figures">
+            <div class="fig"><div class="k">At retirement</div><div class="v" id="v2-r1">—</div><div class="n">Age 65, today's dollars</div></div>
+            <div class="fig"><div class="k">Nominal at 65</div><div class="v" id="v2-r2">—</div><div class="n">Before inflation</div></div>
+            <div class="fig"><div class="k">Monthly income</div><div class="v ox" id="v2-r3">—</div><div class="n">After tax, today's $</div></div>
+            <div class="fig"><div class="k">Simulated success</div><div class="v" id="v2-mc">—</div><div class="n" id="v2-mcn">&nbsp;</div></div>
+          </div>
+        </div>
+
+        <div class="duo">
+          <div class="plate">
+            <header><h3>Tax at withdrawal</h3></header>
+            <div class="ledger-rows" id="v2-tax"></div>
+            <div class="note">
+              Pre-tax contributions were never taxed, so the whole withdrawal is ordinary
+              income. A portfolio that is mostly pre-tax owes tax on the way out — that is
+              the deferral coming due, not an error. <b>Roth balances withdraw clean.</b>
+            </div>
+          </div>
+          <div class="plate">
+            <header><h3>Year by year</h3><span class="cap">Excerpt</span></header>
+            <div class="tbl-wrap"><table id="v2-tbl"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ 3 · HORIZON ═══════════════════ -->
+<section class="stage v3" id="v3" role="tabpanel" aria-labelledby="t3" hidden>
+  <div class="sheet">
+    <div class="masthead">
+      <h1>Retirement Planner</h1>
+      <span class="who">Sample household · 4 accounts</span>
+      <button class="cta" type="button">Run simulation</button>
+    </div>
+
+    <div class="tiles">
+      <div class="tile lead">
+        <div class="k">Monthly income, after tax</div>
+        <div class="v" id="v3-r3">—</div>
+        <div class="n">In today's dollars, sustainable through age 90</div>
+      </div>
+      <div class="tile">
+        <div class="k">At retirement</div>
+        <div class="v" id="v3-r1">—</div>
+        <div class="n">Age 65, today's dollars</div>
+      </div>
+      <div class="tile">
+        <div class="k">Nominal at 65</div>
+        <div class="v" id="v3-r2">—</div>
+        <div class="n">Before inflation discount</div>
+      </div>
+      <div class="tile">
+        <div class="k">Success rate</div>
+        <div class="v" id="v3-mc">—</div>
+        <div class="chip" id="v3-mcchip"><span class="pip"></span><span></span></div>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="chartcard">
+        <header>
+          <h3>The next 40 years, in today's money</h3>
+          <div class="seg">
+            <button type="button" aria-pressed="true">Balance</button>
+            <button type="button" aria-pressed="false">Contributions</button>
+            <button type="button" aria-pressed="false">Withdrawals</button>
+          </div>
+          <div class="legend" id="v3-legend"></div>
+        </header>
+        <div class="plot" data-plot="3">
+          <svg viewBox="0 0 1200 470" preserveAspectRatio="xMidYMid meet" role="img"
+               aria-label="Portfolio balance by age in today's dollars, with the simulated 25th-to-75th percentile range"></svg>
+          <div class="hit"></div>
+          <div class="tip"></div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="panel">
+          <h4>Your plan</h4>
+          <div class="fld"><label for="v3-ret">Retirement age</label>
+            <div class="ctl"><input id="v3-ret" type="text" value="65"></div></div>
+          <div class="fld"><label for="v3-exp">Monthly expenses</label>
+            <div class="ctl"><span class="pre">$</span><input id="v3-exp" type="text" value="11,000"></div></div>
+          <div class="fld"><label for="v3-strat">Withdrawal strategy</label>
+            <div class="ctl"><select id="v3-strat"><option>Fixed monthly amount</option><option>4% rule</option><option>Custom percentage</option></select></div></div>
+        </div>
+        <div class="panel">
+          <h4>Accounts</h4>
+          <div class="acct-owner">Owner A</div>
+          <div class="acct" style="--sc:#2F6BE0"><span class="sw"></span><span class="nm">401(k)</span><span class="amt">$400,000</span></div>
+          <div class="acct" style="--sc:#DC6220"><span class="sw"></span><span class="nm">Roth IRA</span><span class="amt">$200,000</span></div>
+          <div class="acct-owner">Owner B</div>
+          <div class="acct" style="--sc:#0FA37F"><span class="sw"></span><span class="nm">401(k)</span><span class="amt">$300,000</span></div>
+          <div class="acct" style="--sc:#8B5CF6"><span class="sw"></span><span class="nm">Brokerage</span><span class="amt">$150,000</span></div>
+          <button class="add" type="button" style="margin-top:.5rem">+ Add account</button>
+        </div>
+      </aside>
+    </div>
+
+    <div class="duo">
+      <div class="chartcard">
+        <header><h3>Where the tax lands</h3></header>
+        <div class="donut-row">
+          <svg class="donut" id="v3-donut" width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="Portfolio split by tax treatment"></svg>
+          <div class="dlegend" id="v3-dl"></div>
+        </div>
+        <div class="note">
+          Pre-tax balances are taxed as ordinary income when you withdraw — the deduction
+          you took going in comes due here. <b>Roth withdrawals come out clean.</b>
+        </div>
+      </div>
+      <div class="chartcard">
+        <header><h3>Year by year</h3></header>
+        <div class="tbl-wrap"><table id="v3-tbl"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ─────────────────────────────────────────────────────────────
+     MODEL — mirrors the real app's engine so the curves are true,
+     not decorative. Monthly compounding, employer match, tax
+     gross-up on withdrawal, proportional drawdown.
+     ───────────────────────────────────────────────────────────── */
+  const CFG = {
+    currentAge: 50, retireAge: 65, lifeExp: 90,
+    annualIncome: 160000, monthlyExpenses: 11000,
+    inflation: 0.03, ssMonthly: 1800, ssStartAge: 67, taxRate: 0.20,
+  };
+
+  const ACCOUNTS = [
+    { id: "p401", owner: "Owner A", name: "401(k)",    tax: "pretax",  balance: 400000, contribution: 2500, matchPct: 50, matchCap: 6, ret: 7.5, vol: 12 },
+    { id: "prot", owner: "Owner A", name: "Roth IRA",  tax: "roth",    balance: 200000, contribution:  700, matchPct: 0,  matchCap: 0, ret: 8.0, vol: 13 },
+    { id: "l401", owner: "Owner B",  name: "401(k)",    tax: "pretax",  balance: 300000, contribution: 2000, matchPct: 50, matchCap: 5, ret: 7.0, vol: 11 },
+    { id: "lbrk", owner: "Owner B",  name: "Brokerage", tax: "taxable", balance: 150000, contribution:  600, matchPct: 0,  matchCap: 0, ret: 6.5, vol:  9 },
+  ];
+
+  const TAXABLE_GAIN = 0.5, CAP_GAINS = 0.15;
+  const rateFor = (a) => a.tax === "pretax" ? CFG.taxRate : a.tax === "taxable" ? TAXABLE_GAIN * CAP_GAINS : 0;
+
+  function project(draw) {
+    const years = CFG.lifeExp - CFG.currentAge;
+    const bal = {}; ACCOUNTS.forEach(a => bal[a.id] = a.balance);
+    const rows = [];
+
+    for (let y = 0; y <= years; y++) {
+      const age = CFG.currentAge + y;
+      let grossWd = 0, taxPaid = 0;
+
+      if (y > 0) {
+        if (age <= CFG.retireAge) {
+          ACCOUNTS.forEach((a, ai) => {
+            const mr = draw ? Math.pow(draw(ai, y), 1 / 12) - 1 : (a.ret / 100) / 12;
+            let c = a.contribution;
+            if (a.tax === "pretax" && a.matchPct > 0) {
+              const cap = (CFG.annualIncome / 12) * (a.matchCap / 100);
+              c += Math.min(c, cap) * (a.matchPct / 100);
+            }
+            for (let m = 0; m < 12; m++) bal[a.id] = bal[a.id] * (1 + mr) + c;
+          });
+        } else {
+          const ss = age >= CFG.ssStartAge ? CFG.ssMonthly : 0;
+          let need = CFG.monthlyExpenses * Math.pow(1 + CFG.inflation, y) - ss;
+          if (need < 0) need = 0;
+          const tot = ACCOUNTS.reduce((s, a) => s + Math.max(bal[a.id], 0), 0);
+
+          ACCOUNTS.forEach((a, ai) => {
+            const mr = draw ? Math.pow(draw(ai, y), 1 / 12) - 1 : (a.ret / 100) / 12;
+            const share = tot > 0 ? Math.max(bal[a.id], 0) / tot : 0;
+            const r = rateFor(a);
+            const gross = (need * share) / (1 - r);
+            grossWd += gross * 12; taxPaid += gross * r * 12;
+            for (let m = 0; m < 12; m++) {
+              bal[a.id] = bal[a.id] * (1 + mr) - gross;
+              if (bal[a.id] < 0) bal[a.id] = 0;
+            }
+          });
+        }
+      }
+
+      const infl = Math.pow(1 + CFG.inflation, y);
+      rows.push({
+        age,
+        bal: Object.assign({}, bal),
+        total: ACCOUNTS.reduce((s, a) => s + bal[a.id], 0),
+        peter: ACCOUNTS.filter(a => a.owner === "Owner A").reduce((s, a) => s + bal[a.id], 0),
+        lisa:  ACCOUNTS.filter(a => a.owner === "Owner B").reduce((s, a) => s + bal[a.id], 0),
+        wd: grossWd, tax: taxPaid, infl,
+      });
+    }
+    return rows;
+  }
+
+  /* Seeded Monte Carlo for the percentile band — same shape as the app's */
+  function mulberry32(seed) {
+    let s = seed >>> 0, spare = null;
+    const next = () => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return () => {
+      if (spare !== null) { const v = spare; spare = null; return v; }
+      let u = 0, v = 0;
+      while (u === 0) u = next();
+      while (v === 0) v = next();
+      const mag = Math.sqrt(-2 * Math.log(u));
+      spare = mag * Math.sin(2 * Math.PI * v);
+      return mag * Math.cos(2 * Math.PI * v);
+    };
+  }
+
+  function bands(trials) {
+    const rng = mulberry32(0x9e3779b9);
+    const n = CFG.lifeExp - CFG.currentAge + 1;
+    const cols = Array.from({ length: n }, () => new Float64Array(trials));
+    const rho = 0.7, wM = Math.sqrt(rho), wI = Math.sqrt(1 - rho);
+
+    for (let t = 0; t < trials; t++) {
+      let cy = -1, g = [];
+      const draw = (ai, yr) => {
+        if (yr !== cy) {
+          const zm = rng();
+          g = ACCOUNTS.map(a => {
+            const z = wM * zm + wI * rng();
+            const mean = 1 + (Math.pow(1 + (a.ret / 100) / 12, 12) - 1);
+            const sd = a.vol / 100;
+            const vl = Math.log(1 + (sd * sd) / (mean * mean));
+            return Math.exp(Math.log(mean) - vl / 2 + Math.sqrt(vl) * z);
+          });
+          cy = yr;
+        }
+        return g[ai];
+      };
+      project(draw).forEach((r, i) => { cols[i][t] = r.total; });
+    }
+
+    const pct = (arr, p) => {
+      const i = (arr.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+      return lo === hi ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (i - lo);
+    };
+    /* Interquartile band. The 10th-90th spread runs several times the projection
+       over a 40-year horizon and squashes the line the chart exists to show; the
+       downside tail belongs in a stat card, not in the chart's geometry. */
+    const p25 = [], p75 = [], p10end = [];
+    cols.forEach(c => { c.sort(); p25.push(pct(c, 0.25)); p75.push(pct(c, 0.75)); });
+    const last = cols[cols.length - 1];
+    let alive = 0;
+    for (let t = 0; t < trials; t++) if (last[t] > 0) alive++;
+    return { p25, p75, p10: pct(last, 0.10), successRate: alive / trials, trials };
+  }
+
+  const ROWS = project(null);
+  const BAND = bands(2000);
+  const RETIRE_I = ROWS.findIndex(r => r.age === CFG.retireAge);
+
+  /* Sustainable income — annuity payment against each account's real return.
+     The annuity is computed on the age-65 balance, so its payments come out in
+     age-65 dollars. Everything on screen is quoted in today's (age-50) money, so
+     divide through by the inflation factor to retirement. Skipping that step
+     overstates income by ~56% over a 15-year runway. */
+  function income() {
+    const months = (CFG.lifeExp - CFG.retireAge) * 12;
+    const b = ROWS[RETIRE_I].bal;
+    const toToday = ROWS[RETIRE_I].infl;
+    let gross = 0, tax = 0;
+    const byTax = { pretax: { bal: 0, tax: 0 }, roth: { bal: 0, tax: 0 }, taxable: { bal: 0, tax: 0 } };
+    ACCOUNTS.forEach(a => {
+      const realRate = (1 + a.ret / 100) / (1 + CFG.inflation) - 1, r = realRate / 12;
+      const pay = (Math.abs(r) < 1e-9
+        ? b[a.id] / months
+        : (b[a.id] * r) / (1 - Math.pow(1 + r, -months))) / toToday;
+      const t = pay * rateFor(a);
+      gross += pay; tax += t;
+      byTax[a.tax].bal += b[a.id] / toToday; byTax[a.tax].tax += t;
+    });
+    return { gross, tax, net: gross - tax, byTax };
+  }
+  const INC = income();
+
+  const fmt = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const fmtK = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + "M"
+                    : n >= 1e3 ? "$" + Math.round(n / 1e3) + "k" : "$" + Math.round(n);
+
+  /* ─────────────────────────────────────────────────────────────
+     CHART — one renderer, three visual treatments.
+     ───────────────────────────────────────────────────────────── */
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const mk = (tag, attrs) => {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  };
+
+  const VARIANTS = {
+    1: { pad: { t: 26, r: 92, b: 78, l: 78 },
+         grid: "#222D45", axis: "#6F7F9C", total: "#F5B942", band: "#17A67E",
+         bandOp: 0.15, fillOp: 0.20, gridDash: "", accountW: 1.6, totalW: 2.6,
+         markCol: "#F2647C", font: 'ui-monospace, "SF Mono", Menlo, monospace', fontSize: 13 },
+    2: { pad: { t: 24, r: 96, b: 74, l: 82 },
+         grid: "#DDE4DA", axis: "#7C8A81", total: "#16211C", band: "#1F5FA8",
+         bandOp: 0.10, fillOp: 0, gridDash: "", accountW: 1.4, totalW: 2,
+         markCol: "#8E2B36", font: '"Iowan Old Style", Palatino, Georgia, serif', fontSize: 14 },
+    3: { pad: { t: 28, r: 100, b: 78, l: 84 },
+         grid: "#E2E5EF", axis: "#878DA8", total: "url(#dawnLine)", band: "#2F6BE0",
+         bandOp: 0.12, fillOp: 1, gridDash: "", accountW: 1.7, totalW: 3,
+         markCol: "#E4426E", font: '-apple-system, "Segoe UI", Roboto, sans-serif', fontSize: 13 },
+  };
+
+  const COLORS = {
+    1: ["#3D8BF0", "#D96A33", "#17A67E", "#8E78E8"],
+    2: ["#1F5FA8", "#D17420", "#157F5C", "#6B3FA0"],
+    3: ["#2F6BE0", "#DC6220", "#0FA37F", "#8B5CF6"],
+  };
+
+  function buildChart(plot, v) {
+    const svg = plot.querySelector("svg");
+    const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+    const W = vb[2], H = vb[3];
+    const S = VARIANTS[v], C = COLORS[v];
+    const P = S.pad;
+    const iw = W - P.l - P.r, ih = H - P.t - P.b;
+
+    /* Everything is plotted in today's dollars. Over a 40-year horizon a nominal
+       chart is dominated by inflation — a plan that merely holds its purchasing
+       power looks like exponential growth — so the real series is the honest one. */
+    const real = (vals) => vals.map((v, i) => v / ROWS[i].infl);
+    const LO = real(BAND.p25), HI = real(BAND.p75);
+
+    const yMax = Math.max(Math.max(...HI), Math.max(...ROWS.map((r, i) => r.total / r.infl))) * 1.08;
+    const x = (i) => P.l + (i / (ROWS.length - 1)) * iw;
+    const y = (val) => P.t + ih - (Math.max(val, 0) / yMax) * ih;
+
+    const line = (vals) => vals.map((d, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(d).toFixed(1)).join(" ");
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    /* gradients */
+    const defs = mk("defs", {});
+    if (v === 1) {
+      const g = mk("linearGradient", { id: "g1fill", x1: "0", y1: "0", x2: "0", y2: "1" });
+      g.appendChild(mk("stop", { offset: "0%",  "stop-color": "#F5B942", "stop-opacity": "0.28" }));
+      g.appendChild(mk("stop", { offset: "100%", "stop-color": "#F5B942", "stop-opacity": "0" }));
+      defs.appendChild(g);
+    }
+    if (v === 3) {
+      const g = mk("linearGradient", { id: "g3fill", x1: "0", y1: "0", x2: "0", y2: "1" });
+      g.appendChild(mk("stop", { offset: "0%",  "stop-color": "#FF7A5C", "stop-opacity": "0.34" }));
+      g.appendChild(mk("stop", { offset: "55%", "stop-color": "#FFB05C", "stop-opacity": "0.16" }));
+      g.appendChild(mk("stop", { offset: "100%", "stop-color": "#FFB05C", "stop-opacity": "0" }));
+      defs.appendChild(g);
+      const l = mk("linearGradient", { id: "dawnLine", x1: "0", y1: "0", x2: "1", y2: "0" });
+      l.appendChild(mk("stop", { offset: "0%",  "stop-color": "#FFB05C" }));
+      l.appendChild(mk("stop", { offset: "55%", "stop-color": "#FF7A5C" }));
+      l.appendChild(mk("stop", { offset: "100%", "stop-color": "#E4426E" }));
+      defs.appendChild(l);
+    }
+    if (v === 2) {
+      const p = mk("pattern", { id: "hatch", width: "6", height: "6", patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+      p.appendChild(mk("line", { x1: "0", y1: "0", x2: "0", y2: "6", stroke: "#1F5FA8", "stroke-width": "1", "stroke-opacity": "0.22" }));
+      defs.appendChild(p);
+    }
+    svg.appendChild(defs);
+
+    /* y grid + labels */
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const val = (yMax / ticks) * i, yy = y(val);
+      svg.appendChild(mk("line", {
+        x1: P.l, y1: yy, x2: W - P.r, y2: yy,
+        stroke: S.grid, "stroke-width": 1, "vector-effect": "non-scaling-stroke",
+      }));
+      const t = mk("text", { x: P.l - 12, y: yy + 4, "text-anchor": "end",
+        fill: S.axis, "font-family": S.font, "font-size": S.fontSize });
+      t.textContent = i === 0 ? "0" : fmtK(val);
+      svg.appendChild(t);
+    }
+
+    /* simulated band */
+    const bandPath = line(HI) + " " + LO.map((d, i) => {
+      const j = LO.length - 1 - i;
+      return "L" + x(j).toFixed(1) + " " + y(LO[j]).toFixed(1);
+    }).join(" ") + " Z";
+    svg.appendChild(mk("path", {
+      d: bandPath,
+      fill: v === 2 ? "url(#hatch)" : S.band,
+      "fill-opacity": v === 2 ? 1 : S.bandOp,
+      stroke: "none",
+    }));
+    svg.appendChild(mk("path", {
+      d: line(HI), fill: "none", stroke: S.band, "stroke-width": 1,
+      "stroke-opacity": 0.5, "stroke-dasharray": "3 4", "vector-effect": "non-scaling-stroke",
+    }));
+    svg.appendChild(mk("path", {
+      d: line(LO), fill: "none", stroke: S.band, "stroke-width": 1,
+      "stroke-opacity": 0.5, "stroke-dasharray": "3 4", "vector-effect": "non-scaling-stroke",
+    }));
+
+    /* total area fill */
+    if (S.fillOp > 0) {
+      const totals = real(ROWS.map(r => r.total));
+      svg.appendChild(mk("path", {
+        d: line(totals) + " L" + x(ROWS.length - 1) + " " + y(0) + " L" + x(0) + " " + y(0) + " Z",
+        fill: v === 3 ? "url(#g3fill)" : "url(#g1fill)", stroke: "none",
+      }));
+    }
+
+    /* account lines */
+    ACCOUNTS.forEach((a, i) => {
+      svg.appendChild(mk("path", {
+        d: line(real(ROWS.map(r => r.bal[a.id]))),
+        fill: "none", stroke: C[i], "stroke-width": S.accountW,
+        "stroke-linecap": "round", "stroke-linejoin": "round",
+        "vector-effect": "non-scaling-stroke",
+      }));
+    });
+
+    /* total line */
+    svg.appendChild(mk("path", {
+      d: line(real(ROWS.map(r => r.total))),
+      fill: "none", stroke: S.total, "stroke-width": S.totalW,
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke",
+    }));
+
+    /* retirement marker */
+    const rx = x(RETIRE_I);
+    svg.appendChild(mk("line", {
+      x1: rx, y1: P.t - 6, x2: rx, y2: P.t + ih,
+      stroke: S.markCol, "stroke-width": 1.5, "stroke-dasharray": "5 4",
+      "vector-effect": "non-scaling-stroke",
+    }));
+    const flag = mk("text", { x: rx + 8, y: P.t + 6, fill: S.markCol,
+      "font-family": S.font, "font-size": S.fontSize, "font-weight": v === 3 ? "700" : "400" });
+    flag.textContent = "retires at 65";
+    svg.appendChild(flag);
+
+    /* peak label — the one direct label on the chart */
+    const peak = ROWS[RETIRE_I].total / ROWS[RETIRE_I].infl;
+    svg.appendChild(mk("circle", { cx: rx, cy: y(peak), r: 4.5,
+      fill: v === 2 ? "#FBFCFA" : (v === 1 ? "#0A0F1C" : "#FFFFFF"),
+      stroke: v === 3 ? "#FF7A5C" : S.total, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke" }));
+    const pk = mk("text", { x: rx + 8, y: y(peak) - 12,
+      fill: v === 3 ? "#E4426E" : S.total, "font-family": S.font,
+      "font-size": S.fontSize + 3, "font-weight": v === 2 ? "400" : "700" });
+    pk.textContent = fmt(peak);
+    svg.appendChild(pk);
+
+    /* x axis */
+    ROWS.forEach((r, i) => {
+      if (r.age % 5 !== 0) return;
+      const t = mk("text", { x: x(i), y: P.t + ih + 26, "text-anchor": "middle",
+        fill: S.axis, "font-family": S.font, "font-size": S.fontSize });
+      t.textContent = r.age;
+      svg.appendChild(t);
+    });
+    const ax = mk("text", { x: P.l, y: P.t + ih + 54, fill: S.axis,
+      "font-family": S.font, "font-size": S.fontSize - 1, "letter-spacing": "0.1em" });
+    ax.textContent = "AGE";
+    svg.appendChild(ax);
+
+    /* hover layer */
+    const cross = mk("line", { x1: 0, y1: P.t, x2: 0, y2: P.t + ih,
+      stroke: S.axis, "stroke-width": 1, "stroke-opacity": 0, "vector-effect": "non-scaling-stroke" });
+    svg.appendChild(cross);
+    const dots = ACCOUNTS.map((a, i) => {
+      const c = mk("circle", { r: 4, fill: C[i], stroke: v === 1 ? "#0A0F1C" : "#fff",
+        "stroke-width": 2, opacity: 0, "vector-effect": "non-scaling-stroke" });
+      svg.appendChild(c);
+      return c;
+    });
+
+    const hit = plot.querySelector(".hit");
+    const tip = plot.querySelector(".tip");
+
+    function move(ev) {
+      const rect = hit.getBoundingClientRect();
+      const px = ((ev.clientX - rect.left) / rect.width) * W;
+      const i = Math.max(0, Math.min(ROWS.length - 1,
+        Math.round(((px - P.l) / iw) * (ROWS.length - 1))));
+      const r = ROWS[i], gx = x(i);
+
+      cross.setAttribute("x1", gx); cross.setAttribute("x2", gx);
+      cross.setAttribute("stroke-opacity", 0.45);
+      ACCOUNTS.forEach((a, k) => {
+        dots[k].setAttribute("cx", gx);
+        dots[k].setAttribute("cy", y(r.bal[a.id] / r.infl));
+        dots[k].setAttribute("opacity", 1);
+      });
+
+      tip.innerHTML =
+        '<div class="tip-age">Age ' + r.age + (r.age === CFG.retireAge ? " · retires" : "") + "</div>" +
+        ACCOUNTS.map((a, k) =>
+          '<div class="tip-row"><span class="k"><span class="tip-dot" style="background:' + C[k] + '"></span>' +
+          a.owner + " " + a.name + '</span><span class="v">' + fmtK(r.bal[a.id] / r.infl) + "</span></div>"
+        ).join("") +
+        '<div class="tip-rule"></div>' +
+        '<div class="tip-row"><span class="k">Total</span><span class="v">' + fmt(r.total / r.infl) + "</span></div>" +
+        (r.wd > 0
+          ? '<div class="tip-row"><span class="k">Withdrawn</span><span class="v">' + fmt(r.wd / r.infl) + "</span></div>" +
+            '<div class="tip-row"><span class="k">of which tax</span><span class="v">' + fmt(r.tax / r.infl) + "</span></div>"
+          : "");
+
+      tip.classList.add("on");
+      const frac = gx / W;
+      const left = frac * rect.width;
+      const flip = frac > 0.62;
+      tip.style.left = (flip ? left - tip.offsetWidth - 16 : left + 16) + "px";
+      tip.style.top = Math.max(8, (y(r.total / r.infl) / H) * rect.height - tip.offsetHeight / 2) + "px";
+    }
+
+    function leave() {
+      cross.setAttribute("stroke-opacity", 0);
+      dots.forEach(d => d.setAttribute("opacity", 0));
+      tip.classList.remove("on");
+    }
+
+    hit.addEventListener("pointermove", move);
+    hit.addEventListener("pointerleave", leave);
+  }
+
+  /* ── Legends ── */
+  function legend(el, v) {
+    const C = COLORS[v];
+    const tot = v === 1 ? "#F5B942" : v === 2 ? "#16211C" : "#FF7A5C";
+    el.innerHTML =
+      '<span class="li"><span class="sw" style="background:' + tot + ';height:.24rem"></span>Total</span>' +
+      ACCOUNTS.map((a, i) =>
+        '<span class="li"><span class="sw" style="background:' + C[i] + '"></span>' + a.owner + " " + a.name + "</span>"
+      ).join("") +
+      '<span class="li"><span class="sw band" style="background:' + VARIANTS[v].band + '"></span>25th–75th simulated</span>';
+  }
+
+  /* ── Tables ── */
+  function table(el, v) {
+    const pick = [50, 55, 60, 65, 70, 75, 80, 85, 90];
+    const head = v === 1
+      ? ["Age", "Owner A", "Owner B", "Total", "Withdrawn"]
+      : ["Age", "Owner A", "Owner B", "Total", "Withdrawn", "Tax"];
+    el.innerHTML =
+      "<thead><tr>" + head.map(h => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+      pick.map(age => {
+        const r = ROWS.find(z => z.age === age), k = r.infl;
+        const cells = v === 1
+          ? [r.age, fmtK(r.peter / k), fmtK(r.lisa / k), fmtK(r.total / k), r.wd ? fmtK(r.wd / k) : "—"]
+          : [r.age, fmtK(r.peter / k), fmtK(r.lisa / k), fmtK(r.total / k),
+             r.wd ? fmtK(r.wd / k) : "—", r.tax ? fmtK(r.tax / k) : "—"];
+        return '<tr class="' + (age === CFG.retireAge ? "mark" : "") + '">' +
+          cells.map(c => "<td>" + c + "</td>").join("") + "</tr>";
+      }).join("") + "</tbody>";
+  }
+
+  /* ── Tax breakdowns ── */
+  const TAXBUCKETS = [
+    { key: "pretax",  label: "Pre-tax",      note: "Taxed as income at 20%" },
+    { key: "roth",    label: "Roth",         note: "Withdraws tax-free" },
+    { key: "taxable", label: "Taxable",      note: "15% on ~50% gains" },
+  ];
+  const TOTBAL = Object.values(INC.byTax).reduce((s, b) => s + b.bal, 0);
+
+  function bars(el, v) {
+    const cols = v === 1 ? ["#F5B942", "#3FCF8E", "#3D8BF0"] : COLORS[v];
+    el.innerHTML = TAXBUCKETS.map((b, i) => {
+      const d = INC.byTax[b.key], pc = (d.bal / TOTBAL) * 100;
+      return '<div class="bar-row"><div class="top"><span>' + b.label + "</span>" +
+        '<span class="amt">' + fmt(d.bal) + '</span><span class="pc">' + pc.toFixed(0) + "%</span></div>" +
+        '<div class="track"><i style="width:' + pc.toFixed(1) + "%;background:" + cols[i] + '"></i></div></div>';
+    }).join("");
+  }
+
+  function ledgerRows(el) {
+    const C = COLORS[2];
+    el.innerHTML =
+      '<div class="lr head"><span>Treatment</span><span>Balance</span><span>Monthly tax</span></div>' +
+      TAXBUCKETS.map((b, i) => {
+        const d = INC.byTax[b.key];
+        return '<div class="lr"><span class="nm"><span class="sw" style="background:' + C[i] + '"></span>' +
+          b.label + '</span><span class="amt">' + fmt(d.bal) + '</span>' +
+          '<span class="tax">' + (d.tax > 0.5 ? fmt(d.tax) : "—") + "</span></div>";
+      }).join("") +
+      '<div class="lr total"><span class="nm">Total</span><span class="amt">' + fmt(TOTBAL) +
+      '</span><span class="tax">' + fmt(INC.tax) + "</span></div>";
+  }
+
+  function donut(svg, dl) {
+    const C = COLORS[3];
+    const cx = 66, cy = 66, r = 48, w = 20;
+    let a0 = -Math.PI / 2;
+    svg.innerHTML = "";
+    TAXBUCKETS.forEach((b, i) => {
+      const frac = INC.byTax[b.key].bal / TOTBAL;
+      if (frac <= 0) return;
+      const a1 = a0 + frac * Math.PI * 2;
+      const gap = 0.035;
+      const s = a0 + gap / 2, e = Math.max(a1 - gap / 2, s + 0.001);
+      const large = (e - s) > Math.PI ? 1 : 0;
+      const p = document.createElementNS(SVG_NS, "path");
+      p.setAttribute("d",
+        "M" + (cx + r * Math.cos(s)) + " " + (cy + r * Math.sin(s)) +
+        "A" + r + " " + r + " 0 " + large + " 1 " + (cx + r * Math.cos(e)) + " " + (cy + r * Math.sin(e)));
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", C[i]);
+      p.setAttribute("stroke-width", w);
+      p.setAttribute("stroke-linecap", "butt");
+      svg.appendChild(p);
+      a0 = a1;
+    });
+    const t = document.createElementNS(SVG_NS, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cy + 2);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-size", "15"); t.setAttribute("font-weight", "800");
+    t.setAttribute("fill", "#181A2E");
+    t.textContent = fmtK(TOTBAL);
+    svg.appendChild(t);
+    const t2 = document.createElementNS(SVG_NS, "text");
+    t2.setAttribute("x", cx); t2.setAttribute("y", cy + 18);
+    t2.setAttribute("text-anchor", "middle");
+    t2.setAttribute("font-size", "9.5"); t2.setAttribute("fill", "#878DA8");
+    t2.setAttribute("letter-spacing", "0.06em");
+    t2.textContent = "TODAY'S $";
+    svg.appendChild(t2);
+
+    dl.innerHTML = TAXBUCKETS.map((b, i) => {
+      const d = INC.byTax[b.key];
+      return '<div class="dl"><span class="sw" style="background:' + C[i] + '"></span>' +
+        '<span class="nm">' + b.label + '<span class="tax" style="display:block">' +
+        (d.tax > 0.5 ? fmt(d.tax) + "/mo tax" : "no tax on withdrawal") + "</span></span>" +
+        '<span class="amt">' + fmtK(d.bal) + "</span></div>";
+    }).join("");
+  }
+
+  /* ── Populate ── */
+  const R = ROWS[RETIRE_I];
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+
+  set("v1-hero", fmt(R.total / R.infl));
+  ["v1-r1", "v2-r1", "v3-r1"].forEach(id => set(id, fmt(R.total / R.infl)));
+  ["v1-r2", "v2-r2", "v3-r2"].forEach(id => set(id, fmt(R.total)));
+  ["v1-r3", "v2-r3", "v3-r3"].forEach(id => set(id, fmt(INC.net)));
+  set("v1-taxmo", fmt(INC.tax));
+
+  const mcPct = (BAND.successRate * 100).toFixed(1) + "%";
+  /* The 10th percentile is out of the chart band but still the number that
+     matters on the downside, so it is reported here instead. */
+  const mcNote = Math.round(BAND.successRate * BAND.trials).toLocaleString("en-US") +
+    " of " + BAND.trials.toLocaleString("en-US") + " paths funded at 90 · poor market ends at " +
+    fmtK(BAND.p10 / ROWS[ROWS.length - 1].infl);
+  ["v1-mc", "v2-mc", "v3-mc"].forEach(id => set(id, mcPct));
+  ["v1-mcn", "v2-mcn"].forEach(id => set(id, mcNote));
+  /* Semantic state is derived, never hard-coded — the mockups show the real
+     amber band rather than a flattering green that would never appear. */
+  const level = BAND.successRate >= 0.85 ? "good" : BAND.successRate >= 0.7 ? "fair" : "poor";
+  const label = { good: "Holds to 90", fair: "Some risk", poor: "Underfunded" }[level];
+
+  const chip = document.querySelector("#v3-mcchip span:last-child");
+  if (chip) chip.textContent = label;
+  if (level !== "good") {
+    const c = document.getElementById("v3-mcchip");
+    c.style.background = level === "fair" ? "rgba(220,98,32,0.13)" : "rgba(228,66,110,0.13)";
+    c.style.color = level === "fair" ? "#DC6220" : "#E4426E";
+    const v1 = document.getElementById("v1-mc");
+    if (v1) { v1.classList.remove("good"); v1.style.color = level === "fair" ? "#F5B942" : "#F2647C"; }
+  }
+  const stamp = document.getElementById("v1-stamp");
+  if (stamp) {
+    stamp.querySelector("span:last-child").textContent = label.toUpperCase();
+    if (level !== "good") {
+      const col = level === "fair" ? "#F5B942" : "#F2647C";
+      stamp.style.color = col;
+      stamp.querySelector(".pip").style.background = col;
+      stamp.querySelector(".pip").style.boxShadow = "0 0 0 3px " +
+        (level === "fair" ? "rgba(245,185,66,0.16)" : "rgba(242,100,124,0.16)");
+    }
+  }
+
+  [1, 2, 3].forEach(v => {
+    buildChart(document.querySelector('[data-plot="' + v + '"]'), v);
+    legend(document.getElementById("v" + v + "-legend"), v);
+    table(document.getElementById("v" + v + "-tbl"), v);
+  });
+  bars(document.getElementById("v1-bars"), 1);
+  ledgerRows(document.getElementById("v2-tax"));
+  donut(document.getElementById("v3-donut"), document.getElementById("v3-dl"));
+
+  /* ── Tabs ── */
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => {
+        const on = t === tab;
+        t.setAttribute("aria-selected", String(on));
+        const panel = document.getElementById(t.getAttribute("aria-controls"));
+        panel.classList.toggle("on", on);
+        panel.hidden = !on;
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  /* Segmented control in Horizon is a mockup affordance — show it responds */
+  document.querySelectorAll(".v3 .seg button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".v3 .seg button").forEach(o =>
+        o.setAttribute("aria-pressed", String(o === b)));
+    });
+  });
+})();
+</script>

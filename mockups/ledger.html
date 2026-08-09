@@ -1,0 +1,1041 @@
+<title>Retirement Planner — Ledger, Oyster</title>
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   LEDGER — iteration 4 · Oyster
+   Full-width chart; Plan and Accounts open as drawers from their own
+   triggers. Light only, by choice: this design is a printed statement and
+   commits to paper; every colour is painted explicitly so the page holds
+   on any host ground.
+
+   The account series are deliberately low-chroma — muted slate, clay,
+   plum and pine that sit down against the paper rather than competing
+   with it. They are still well separated for normal colour vision; the
+   colourblind-safe constraint is intentionally not applied here.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── OYSTER — warm bone paper, deep teal accent, Charter ── */
+.app {
+  --paper:#EFEAE1; --plate:#FCFAF6; --plate-2:#F5F1E9;
+  --rule:#D8CFC0;  --rule-2:#E7E0D4;
+  --ink:#221D16;   --ink-2:#5C5346; --ink-3:#8A8071;
+  --accent:#14554F;
+  --s1:#2F6383; --s2:#A8623A; --s3:#6E5080; --s4:#2E6E58;
+  --f-disp:Charter,"Bitstream Charter","Sitka Text",Cambria,Georgia,serif;
+  --f-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --label-tr:0.2em; --disp-scale:0.94; --disp-tr:0; --disp-weight:400;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #EFEAE1;
+  color: #221D16;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── App shell ───────────────────────────────────────────── */
+.app {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  min-height: 100vh;
+  padding: 1.5rem 1.4rem 3rem;
+}
+.sheet { max-width: 82rem; margin: 0 auto; }
+
+.masthead {
+  display: flex; align-items: flex-end; gap: 1.1rem;
+  padding-bottom: 0.75rem; border-bottom: 2px solid var(--ink);
+}
+.mast-id { min-width: 0; }
+.mast-line { display: flex; align-items: baseline; gap: 0.8rem; }
+/* The drawers hide the controls, never the facts: the digest keeps every value
+   that drives the projection in the header, where it reads as a standfirst. */
+.digest {
+  margin: 0.3rem 0 0; font-size: 0.76rem; line-height: 1.5;
+  color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.masthead h1 {
+  margin: 0; font-family: var(--f-disp);
+  font-size: calc(1.72rem * var(--disp-scale));
+  font-weight: var(--disp-weight); letter-spacing: var(--disp-tr);
+}
+.masthead .kicker {
+  font-size: 0.68rem; letter-spacing: var(--label-tr); text-transform: uppercase;
+  color: var(--ink-3); padding-bottom: 0.28rem;
+}
+.masthead .filed {
+  margin-left: auto; text-align: right; padding-bottom: 0.22rem;
+  font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+}
+.masthead .filed b {
+  display: block; font-family: var(--f-disp); font-size: 0.95rem;
+  letter-spacing: 0; text-transform: none; color: var(--ink); font-weight: 400;
+}
+
+/* Content is always full width; the drawers float above it, so closing
+   them is the default state rather than a reward for tidying up. */
+.stack { display: flex; flex-direction: column; gap: 1.3rem; margin-top: 1.2rem; }
+
+.toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+.triggers { margin-left: auto; display: flex; gap: 0.5rem; }
+
+/* Monte Carlo */
+.mc { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.mc-trials { display: flex; align-items: center; gap: 0.4rem; font-size: 0.68rem;
+  letter-spacing: var(--label-tr); text-transform: uppercase; color: var(--ink-3); }
+.mc-trials select {
+  background: transparent; border: 0; border-bottom: 1px solid var(--rule);
+  color: var(--ink); font-family: var(--f-disp); font-size: 0.88rem;
+  font-variant-numeric: tabular-nums; padding: 0.1rem 0.2rem; outline: none;
+}
+.mc-trials select:focus { border-bottom-color: var(--accent); box-shadow: 0 1px 0 0 var(--accent); }
+.mc-run {
+  appearance: none; cursor: pointer;
+  background: var(--accent); border: 1px solid var(--accent); color: var(--plate);
+  font: inherit; font-size: 0.68rem; letter-spacing: var(--label-tr);
+  text-transform: uppercase; padding: 0.46rem 0.95rem;
+}
+.mc-run:hover { background: var(--ink); border-color: var(--ink); }
+.mc-run:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.mc-run[disabled] { opacity: 0.55; cursor: default; }
+.mc-state { font-size: 0.72rem; color: var(--ink-3); }
+.mc-state.stale { color: var(--accent); }
+.mc-bar { display: block; width: 7rem; height: 3px; background: var(--rule-2); }
+.mc-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
+.panel-btn {
+  appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: var(--plate); border: 1px solid var(--rule); color: var(--ink);
+  font: inherit; font-size: 0.68rem; letter-spacing: var(--label-tr);
+  text-transform: uppercase; padding: 0.46rem 0.85rem;
+  transition: background 0.14s, border-color 0.14s;
+}
+.panel-btn:hover { border-color: var(--ink-2); }
+.panel-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel-btn[aria-expanded="true"] { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+.panel-btn .ico { font-size: 0.6rem; transition: transform 0.2s; }
+.panel-btn[aria-expanded="true"] .ico { transform: rotate(90deg); }
+
+/* Drawer */
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 50;
+  width: min(23rem, 92vw);
+  background: var(--plate); border-left: 1px solid var(--rule);
+  box-shadow: -18px 0 40px -24px rgba(0,0,0,0.45);
+  transform: translateX(100%); transition: transform 0.24s ease;
+  display: flex; flex-direction: column;
+}
+.drawer.on { transform: translateX(0); }
+.drawer-head {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 1rem 1.1rem 0.7rem; border-bottom: 1px solid var(--rule);
+}
+.drawer-head h2 {
+  margin: 0; font-family: var(--f-disp); font-weight: var(--disp-weight);
+  font-size: calc(1.02rem * var(--disp-scale)); letter-spacing: var(--disp-tr);
+}
+.drawer-close {
+  appearance: none; margin-left: auto; cursor: pointer;
+  background: transparent; border: 1px solid var(--rule); color: var(--ink-2);
+  font: inherit; font-size: 0.95rem; line-height: 1;
+  width: 1.75rem; height: 1.75rem;
+}
+.drawer-close:hover { background: var(--ink); color: var(--plate); border-color: var(--ink); }
+.drawer-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drawer-body { padding: 0.9rem 1.1rem 2rem; overflow-y: auto; flex: 1; }
+.drawer-body h3 {
+  margin: 1.2rem 0 0.55rem; font-size: 0.62rem; letter-spacing: var(--label-tr);
+  text-transform: uppercase; color: var(--ink-3);
+  padding-bottom: 0.3rem; border-bottom: 1px solid var(--rule);
+}
+.drawer-body h3:first-child { margin-top: 0; }
+
+.plate { background: var(--plate); border: 1px solid var(--rule); padding: 1.15rem 1.25rem 1.25rem; }
+.plate > header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 0.45rem; }
+.plate > header h2, .plate > header h3 {
+  margin: 0; font-family: var(--f-disp); font-weight: var(--disp-weight);
+  font-size: calc(1.06rem * var(--disp-scale)); letter-spacing: var(--disp-tr);
+}
+.plate > header .cap {
+  white-space: nowrap; font-size: 0.64rem; letter-spacing: var(--label-tr);
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+.legend { margin-left: auto; display: flex; flex-wrap: wrap; gap: 0.28rem 0.8rem; }
+.legend .li { display: flex; align-items: center; gap: 0.36rem; font-size: 0.7rem; color: var(--ink-2); }
+.legend .sw { width: 0.85rem; height: 0.14rem; }
+.legend .sw.band { height: 0.5rem; opacity: 0.5; }
+
+/* Chart */
+.plot { position: relative; width: 100%; }
+.plot svg { display: block; width: 100%; height: auto; }
+.plot .hit { position: absolute; inset: 0; cursor: crosshair; }
+.tip {
+  position: absolute; pointer-events: none; opacity: 0; transition: opacity 0.1s;
+  z-index: 5; min-width: 12.5rem; padding: 0.6rem 0.7rem;
+  font-size: 0.75rem; line-height: 1.45; font-variant-numeric: tabular-nums;
+  background: var(--plate); border: 1px solid var(--ink); color: var(--ink);
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.10);
+}
+.tip.on { opacity: 1; }
+.tip-age { font-family: var(--f-disp); font-size: 0.92rem; margin-bottom: 0.3rem; }
+.tip-row { display: flex; align-items: center; gap: 0.45rem; }
+.tip-row .k { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; color: var(--ink-2); }
+.tip-row .v { font-family: var(--f-disp); font-weight: 600; }
+.tip-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; }
+.tip-rule { height: 1px; background: var(--rule); margin: 0.38rem 0; }
+
+/* Figures strip under the chart */
+.figures { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); margin-top: 0.85rem; }
+.fig { padding: 0.8rem 0.85rem 0.15rem; border-right: 1px solid var(--rule-2); min-width: 0; }
+.fig:first-child { padding-left: 0; }
+.fig:last-child { border-right: 0; padding-right: 0; }
+.fig .k { font-size: 0.6rem; letter-spacing: var(--label-tr); text-transform: uppercase; color: var(--ink-3); }
+.fig .v {
+  font-family: var(--f-disp); font-size: calc(1.5rem * var(--disp-scale));
+  margin-top: 0.12rem; font-variant-numeric: tabular-nums;
+  font-weight: var(--disp-weight); letter-spacing: var(--disp-tr);
+}
+.fig .v.accent { color: var(--accent); }
+.fig .n { font-size: 0.67rem; color: var(--ink-3); margin-top: 0.08rem; line-height: 1.4; }
+
+/* ── Right column ────────────────────────────────────────── */
+
+
+.fld { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.5rem; padding: 0.3rem 0; }
+.fld label { font-size: 0.78rem; color: var(--ink-2); }
+.fld input, .fld select {
+  width: 6.4rem; text-align: right;
+  background: transparent; border: 0; border-bottom: 1px solid var(--rule);
+  color: var(--ink); font-family: var(--f-disp); font-size: 0.92rem;
+  font-variant-numeric: tabular-nums; padding: 0.12rem 0.2rem; outline: none;
+}
+.fld select { width: 8.4rem; font-family: var(--f-ui); font-size: 0.76rem; text-align: left; }
+.fld input:focus, .fld select:focus { border-bottom-color: var(--accent); box-shadow: 0 1px 0 0 var(--accent); }
+
+/* Assumptions disclosure */
+.assump { margin-top: 0.2rem; }
+.disclose {
+  appearance: none; width: 100%; cursor: pointer;
+  display: flex; align-items: center; gap: 0.5rem;
+  background: transparent; border: 0; padding: 0; color: var(--ink);
+  font: inherit; font-size: 0.62rem; letter-spacing: var(--label-tr);
+  text-transform: uppercase; text-align: left;
+}
+.disclose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.disclose .chev {
+  margin-left: auto; font-size: 0.6rem; color: var(--ink-3);
+  transition: transform 0.18s;
+}
+.disclose[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.assump-sum {
+  font-size: 0.72rem; line-height: 1.6; color: var(--ink-3);
+  margin-top: 0.45rem; font-variant-numeric: tabular-nums;
+}
+.assump-body { display: none; margin-top: 0.35rem; }
+.assump[data-open="true"] .assump-body { display: block; }
+.assump[data-open="true"] .assump-sum { display: none; }
+
+/* Accounts */
+.owner-hd {
+  font-family: var(--f-disp); font-style: italic; font-size: 0.95rem;
+  color: var(--ink); margin: 0.75rem 0 0.15rem;
+}
+.owner-hd:first-of-type { margin-top: 0.2rem; }
+.acct { border-bottom: 1px dotted var(--rule); }
+.acct-head {
+  appearance: none; width: 100%; cursor: pointer;
+  display: grid; grid-template-columns: 0.7rem 0.55rem 1fr auto; align-items: center; gap: 0.45rem;
+  background: transparent; border: 0; padding: 0.44rem 0; color: var(--ink);
+  font: inherit; text-align: left;
+}
+.acct-head:hover { background: var(--plate-2); }
+.acct-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.acct-head .chev { font-size: 0.58rem; color: var(--ink-3); transition: transform 0.18s; }
+.acct-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.acct-head .sw { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--sc); }
+.acct-head .nm { font-size: 0.79rem; min-width: 0; }
+.acct-head .nm small {
+  display: block; font-size: 0.61rem; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.acct-head .amt { font-family: var(--f-disp); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.acct-body { display: none; padding: 0.15rem 0 0.7rem 1.25rem; }
+.acct[data-open="true"] .acct-body { display: block; }
+.acct-body .fld { padding: 0.22rem 0; }
+.acct-body .fld label { font-size: 0.73rem; }
+.acct-body .fld input, .acct-body .fld select { width: 5.6rem; font-size: 0.85rem; }
+.acct-body .fld select { width: 8.3rem; font-size: 0.7rem; }
+
+.add {
+  appearance: none; margin-top: 0.8rem; width: 100%; cursor: pointer;
+  background: transparent; border: 1px solid var(--ink); color: var(--ink);
+  font: inherit; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.45rem 0.7rem;
+}
+.add:hover { background: var(--ink); color: var(--plate); }
+.add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Lower row ───────────────────────────────────────────── */
+.col-main { display: flex; flex-direction: column; gap: 1.3rem; min-width: 0; }
+.wide { margin-top: 1.3rem; }
+
+.taxgrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.6rem; align-items: start; }
+.taxbar { margin: 0.35rem 0 1.15rem; }
+.taxbar .track { display: flex; gap: 2px; height: 1.55rem; }
+.taxbar .seg { position: relative; min-width: 2px; }
+.taxbar .keys { display: flex; gap: 1.4rem; margin-top: 0.5rem; flex-wrap: wrap; }
+.taxbar .key { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.74rem; color: var(--ink-2); }
+.taxbar .key .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; align-self: center; flex: none; }
+.taxbar .key b { font-family: var(--f-disp); font-weight: var(--disp-weight); font-variant-numeric: tabular-nums; color: var(--ink); }
+.taxbar .key .pc { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ledger-rows { display: flex; flex-direction: column; }
+.lr { display: grid; grid-template-columns: 1fr auto auto; gap: 0.7rem; align-items: baseline; padding: 0.5rem 0; border-bottom: 1px solid var(--rule-2); }
+.lr:last-child { border-bottom: 0; }
+.lr .nm { font-size: 0.82rem; display: flex; align-items: center; gap: 0.45rem; }
+.lr .nm .sw { width: 0.55rem; height: 0.55rem; border-radius: 50%; }
+.lr .amt { font-family: var(--f-disp); font-size: 1rem; font-variant-numeric: tabular-nums; }
+.lr .tax { font-family: var(--f-disp); font-size: 0.88rem; color: var(--accent); font-variant-numeric: tabular-nums; width: 5.4rem; text-align: right; }
+.lr.head { border-bottom: 1px solid var(--rule); padding-bottom: 0.32rem; }
+.lr.head span { font-size: 0.6rem; letter-spacing: var(--label-tr); text-transform: uppercase; color: var(--ink-3); font-family: var(--f-ui); }
+.lr.total { border-top: 2px solid var(--ink); border-bottom: 0; margin-top: 0.2rem; padding-top: 0.5rem; }
+.note { font-size: 0.76rem; line-height: 1.6; color: var(--ink-2); }
+.note b { color: var(--accent); font-weight: 600; }
+
+.pages { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2.2rem; }
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+th {
+  font-family: var(--f-ui); font-size: 0.58rem; font-weight: 600;
+  letter-spacing: var(--label-tr); text-transform: uppercase; color: var(--ink-3);
+  text-align: right; padding: 0 0.55rem 0.42rem; border-bottom: 1px solid var(--ink); white-space: nowrap;
+}
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
+td { font-family: var(--f-disp); text-align: right; padding: 0.34rem 0.55rem; border-bottom: 1px solid var(--rule-2); white-space: nowrap; }
+tr.mark td { background: var(--plate-2); color: var(--accent); }
+tr.mark td:first-child { font-style: italic; }
+
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; } }
+
+@media (max-width: 1080px) {
+  .taxgrid { grid-template-columns: 1fr; gap: 1rem; }
+  .pages { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .figures { grid-template-columns: repeat(2, 1fr); }
+  .fig:nth-child(2) { border-right: 0; padding-right: 0; }
+  .fig:nth-child(3) { padding-left: 0; }
+}
+</style>
+
+<div class="app">
+  <div class="sheet">
+
+    <div class="masthead">
+      <div class="mast-id">
+        <div class="mast-line"><h1>Retirement Planner</h1><span class="kicker">Projection</span></div>
+        <p class="digest" id="digest"></p>
+      </div>
+      <span class="filed">Prepared for<b>Sample household</b></span>
+    </div>
+
+    <div class="toolbar">
+      <div class="mc" id="mc">
+        <label class="mc-trials">
+          <span>Trials</span>
+          <select id="mc-count">
+            <option value="1000">1,000</option>
+            <option value="2000" selected>2,000</option>
+            <option value="5000">5,000</option>
+            <option value="10000">10,000</option>
+          </select>
+        </label>
+        <button class="mc-run" type="button" id="mc-run">Run simulation</button>
+        <span class="mc-state" id="mc-state"></span>
+        <span class="mc-bar" id="mc-bar" hidden><i></i></span>
+      </div>
+
+      <div class="triggers">
+        <button class="panel-btn" type="button" id="btn-plan" aria-expanded="false" aria-controls="drawer-plan">
+          Plan &amp; assumptions <span class="ico">&#9654;</span>
+        </button>
+        <button class="panel-btn" type="button" id="btn-acct" aria-expanded="false" aria-controls="drawer-acct">
+          Accounts <span class="ico">&#9654;</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="stack">
+
+      <div class="plate">
+        <header>
+          <h2>Portfolio through life expectancy</h2>
+          <span class="cap">Fig. 1 &middot; today's dollars</span>
+          <div class="legend" id="legend"></div>
+        </header>
+        <div class="plot">
+          <svg viewBox="0 0 1200 480" preserveAspectRatio="xMidYMid meet" role="img"
+               aria-label="Portfolio balance by age in today's dollars, with the simulated 25th-to-75th percentile range"></svg>
+          <div class="hit"></div>
+          <div class="tip"></div>
+        </div>
+        <div class="figures">
+          <div class="fig"><div class="k">At retirement</div><div class="v" id="f1">&mdash;</div><div class="n">Age 65, today's dollars</div></div>
+          <div class="fig"><div class="k">Nominal at 65</div><div class="v" id="f2">&mdash;</div><div class="n">Before inflation</div></div>
+          <div class="fig"><div class="k">Monthly income</div><div class="v accent" id="f3">&mdash;</div><div class="n">After tax, today's $</div></div>
+          <div class="fig"><div class="k">Simulated success</div><div class="v" id="f4">&mdash;</div><div class="n" id="f4n">&nbsp;</div></div>
+        </div>
+      </div>
+
+      <div class="plate">
+        <header><h3>Tax at withdrawal</h3></header>
+        <div class="taxbar" id="taxbar"></div>
+        <div class="taxgrid">
+          <div class="ledger-rows" id="taxrows"></div>
+          <div class="note">
+            Pre-tax contributions were never taxed, so the whole withdrawal is ordinary
+            income. A portfolio that is mostly pre-tax owes tax on the way out &mdash; that is
+            the deferral coming due, not an error. <b>Roth balances withdraw clean.</b>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── FULL-WIDTH LEDGER ── -->
+    <div class="plate wide">
+      <header><h3>Year by year</h3><span class="cap">Today's dollars</span></header>
+      <div class="pages">
+        <div class="tbl-wrap"><table id="tbl-a"></table></div>
+        <div class="tbl-wrap"><table id="tbl-b"></table></div>
+      </div>
+    </div>
+
+  </div>
+
+  <aside class="drawer" id="drawer-plan" role="dialog" aria-modal="false" aria-labelledby="drawer-plan-t" hidden>
+    <div class="drawer-head">
+      <h2 id="drawer-plan-t">Plan &amp; assumptions</h2>
+      <button class="drawer-close" type="button" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <h3>The levers</h3>
+      <div class="fld"><label for="k-ret">Retirement age</label><input id="k-ret" type="text" value="65"></div>
+      <div class="fld"><label for="k-exp">Monthly expenses</label><input id="k-exp" type="text" value="11,000"></div>
+      <div class="fld"><label for="k-strat">Withdrawal strategy</label>
+        <select id="k-strat"><option>Fixed monthly</option><option>4% rule</option><option>Custom %</option></select></div>
+
+      <h3>Assumptions</h3>
+      <div class="fld"><label for="a-dob">Date of birth</label><input id="a-dob" type="text" value="1980-01-01"></div>
+      <div class="fld"><label for="a-life">Life expectancy</label><input id="a-life" type="text" value="90"></div>
+      <div class="fld"><label for="a-inf">Inflation</label><input id="a-inf" type="text" value="3%"></div>
+      <div class="fld"><label for="a-taxrate">Tax rate in retirement</label><input id="a-taxrate" type="text" value="20%"></div>
+      <div class="fld"><label for="a-ss">Social Security</label><input id="a-ss" type="text" value="1,800"></div>
+      <div class="fld"><label for="a-ssage">SS start age</label><input id="a-ssage" type="text" value="67"></div>
+      <div class="fld"><label for="a-corr">Asset correlation</label><input id="a-corr" type="text" value="70%"></div>
+      <div class="fld"><label for="a-income">Annual income</label><input id="a-income" type="text" value="160,000"></div>
+    </div>
+  </aside>
+
+  <aside class="drawer" id="drawer-acct" role="dialog" aria-modal="false" aria-labelledby="drawer-acct-t" hidden>
+    <div class="drawer-head">
+      <h2 id="drawer-acct-t">Accounts</h2>
+      <button class="drawer-close" type="button" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <div id="accounts"></div>
+      <button class="add" type="button">Add account</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── Model (mirrors the app's engine) ──
+     Every figure below is invented placeholder data for the mockup: round
+     numbers, generic owner names, a 1 January birth date. Nothing here is
+     anyone's real balance, contribution or income. */
+  const CFG = {
+    currentAge: 50, retireAge: 65, lifeExp: 90,
+    annualIncome: 160000, monthlyExpenses: 11000,
+    inflation: 0.03, ssMonthly: 1800, ssStartAge: 67, taxRate: 0.20,
+  };
+
+  const ACCOUNTS = [
+    { id:"p401", owner:"Owner A", name:"401(k)",    tax:"pretax",  taxLabel:"Pre-tax",  balance:400000, contribution:2500, matchPct:50, matchCap:6, ret:7.5, vol:12 },
+    { id:"prot", owner:"Owner A", name:"Roth IRA",  tax:"roth",    taxLabel:"Post-tax", balance:200000, contribution: 700, matchPct:0,  matchCap:0, ret:8.0, vol:13 },
+    { id:"l401", owner:"Owner B",  name:"401(k)",    tax:"pretax",  taxLabel:"Pre-tax",  balance:300000, contribution:2000, matchPct:50, matchCap:5, ret:7.0, vol:11 },
+    { id:"lbrk", owner:"Owner B",  name:"Brokerage", tax:"taxable", taxLabel:"Taxable",  balance:150000, contribution: 600, matchPct:0,  matchCap:0, ret:6.5, vol: 9 },
+  ];
+
+  const TAXABLE_GAIN = 0.5, CAP_GAINS = 0.15;
+  const rateFor = (a) => a.tax === "pretax" ? CFG.taxRate : a.tax === "taxable" ? TAXABLE_GAIN * CAP_GAINS : 0;
+
+  function project(draw) {
+    const years = CFG.lifeExp - CFG.currentAge;
+    const bal = {}; ACCOUNTS.forEach(a => bal[a.id] = a.balance);
+    const rows = [];
+    for (let y = 0; y <= years; y++) {
+      const age = CFG.currentAge + y;
+      let grossWd = 0, taxPaid = 0;
+      if (y > 0) {
+        if (age <= CFG.retireAge) {
+          ACCOUNTS.forEach((a, ai) => {
+            const mr = draw ? Math.pow(draw(ai, y), 1 / 12) - 1 : (a.ret / 100) / 12;
+            let c = a.contribution;
+            if (a.tax === "pretax" && a.matchPct > 0) {
+              const cap = (CFG.annualIncome / 12) * (a.matchCap / 100);
+              c += Math.min(c, cap) * (a.matchPct / 100);
+            }
+            for (let m = 0; m < 12; m++) bal[a.id] = bal[a.id] * (1 + mr) + c;
+          });
+        } else {
+          const ss = age >= CFG.ssStartAge ? CFG.ssMonthly : 0;
+          let need = CFG.monthlyExpenses * Math.pow(1 + CFG.inflation, y) - ss;
+          if (need < 0) need = 0;
+          const tot = ACCOUNTS.reduce((s, a) => s + Math.max(bal[a.id], 0), 0);
+          ACCOUNTS.forEach((a, ai) => {
+            const mr = draw ? Math.pow(draw(ai, y), 1 / 12) - 1 : (a.ret / 100) / 12;
+            const share = tot > 0 ? Math.max(bal[a.id], 0) / tot : 0;
+            const r = rateFor(a);
+            const gross = (need * share) / (1 - r);
+            grossWd += gross * 12; taxPaid += gross * r * 12;
+            for (let m = 0; m < 12; m++) {
+              bal[a.id] = bal[a.id] * (1 + mr) - gross;
+              if (bal[a.id] < 0) bal[a.id] = 0;
+            }
+          });
+        }
+      }
+      rows.push({
+        age, bal: Object.assign({}, bal),
+        total: ACCOUNTS.reduce((s, a) => s + bal[a.id], 0),
+        peter: ACCOUNTS.filter(a => a.owner === "Owner A").reduce((s, a) => s + bal[a.id], 0),
+        lisa:  ACCOUNTS.filter(a => a.owner === "Owner B").reduce((s, a) => s + bal[a.id], 0),
+        wd: grossWd, tax: taxPaid, infl: Math.pow(1 + CFG.inflation, y),
+      });
+    }
+    return rows;
+  }
+
+  function mulberry32(seed) {
+    let s = seed >>> 0, spare = null;
+    const next = () => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return () => {
+      if (spare !== null) { const v = spare; spare = null; return v; }
+      let u = 0, v = 0;
+      while (u === 0) u = next();
+      while (v === 0) v = next();
+      const mag = Math.sqrt(-2 * Math.log(u));
+      spare = mag * Math.sin(2 * Math.PI * v);
+      return mag * Math.cos(2 * Math.PI * v);
+    };
+  }
+
+  const pctOf = (arr, p) => {
+    const i = (arr.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+    return lo === hi ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (i - lo);
+  };
+
+  /* One trial. Correlated lognormal draws, one market factor a year plus an
+     account-specific shock — same shape as the app's engine. */
+  function trial(rng) {
+    const rho = 0.7, wM = Math.sqrt(rho), wI = Math.sqrt(1 - rho);
+    let cy = -1, g = [];
+    return project((ai, yr) => {
+      if (yr !== cy) {
+        const zm = rng();
+        g = ACCOUNTS.map(a => {
+          const z = wM * zm + wI * rng();
+          const mean = Math.pow(1 + (a.ret / 100) / 12, 12);
+          const sd = a.vol / 100;
+          const vl = Math.log(1 + (sd * sd) / (mean * mean));
+          return Math.exp(Math.log(mean) - vl / 2 + Math.sqrt(vl) * z);
+        });
+        cy = yr;
+      }
+      return g[ai];
+    });
+  }
+
+  function summarise(cols, trials) {
+    const p25 = [], p75 = [];
+    cols.forEach(c => { c.sort(); p25.push(pctOf(c, 0.25)); p75.push(pctOf(c, 0.75)); });
+    const last = cols[cols.length - 1];
+    let alive = 0;
+    for (let t = 0; t < trials; t++) if (last[t] > 0) alive++;
+    return { p25, p75, p10: pctOf(last, 0.10), successRate: alive / trials, trials };
+  }
+
+  function bands(trials, seed) {
+    const rng = mulberry32(seed === undefined ? 0x9e3779b9 : seed);
+    const n = CFG.lifeExp - CFG.currentAge + 1;
+    const cols = Array.from({ length: n }, () => new Float64Array(trials));
+    for (let t = 0; t < trials; t++) trial(rng).forEach((r, i) => { cols[i][t] = r.total; });
+    return summarise(cols, trials);
+  }
+
+  /* Chunked so the progress bar tracks real work rather than animating a guess,
+     and a 10,000-trial run does not freeze the page. */
+  function bandsAsync(trials, seed, onProgress) {
+    return new Promise(resolve => {
+      const rng = mulberry32(seed);
+      const n = CFG.lifeExp - CFG.currentAge + 1;
+      const cols = Array.from({ length: n }, () => new Float64Array(trials));
+      const CHUNK = 250;
+      let t = 0;
+      (function step() {
+        const end = Math.min(t + CHUNK, trials);
+        for (; t < end; t++) trial(rng).forEach((r, i) => { cols[i][t] = r.total; });
+        onProgress(t / trials);
+        if (t < trials) setTimeout(step, 0);
+        else resolve(summarise(cols, trials));
+      })();
+    });
+  }
+
+  const ROWS = project(null);
+  let BAND = bands(2000);
+  const RETIRE_I = ROWS.findIndex(r => r.age === CFG.retireAge);
+
+  function income() {
+    const months = (CFG.lifeExp - CFG.retireAge) * 12;
+    const b = ROWS[RETIRE_I].bal, toToday = ROWS[RETIRE_I].infl;
+    let gross = 0, tax = 0;
+    const byTax = { pretax:{bal:0,tax:0}, roth:{bal:0,tax:0}, taxable:{bal:0,tax:0} };
+    ACCOUNTS.forEach(a => {
+      const realRate = (1 + a.ret / 100) / (1 + CFG.inflation) - 1, r = realRate / 12;
+      const pay = (Math.abs(r) < 1e-9 ? b[a.id] / months
+        : (b[a.id] * r) / (1 - Math.pow(1 + r, -months))) / toToday;
+      const t = pay * rateFor(a);
+      gross += pay; tax += t;
+      byTax[a.tax].bal += b[a.id] / toToday; byTax[a.tax].tax += t;
+    });
+    return { gross, tax, net: gross - tax, byTax };
+  }
+  const INC = income();
+
+  const fmt  = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  const fmtK = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + "M"
+                    : n >= 1e3 ? "$" + Math.round(n / 1e3) + "k" : "$" + Math.round(n);
+
+  /* ── Theme is read from the cascade, so a paper swap needs no JS table ── */
+  const app = document.querySelector(".app");
+  function theme() {
+    const cs = getComputedStyle(app);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    return {
+      series: [g("--s1"), g("--s2"), g("--s3"), g("--s4")],
+      accent: g("--accent"), ink: g("--ink"), ink3: g("--ink-3"),
+      rule: g("--rule-2"), plate: g("--plate"), font: g("--f-disp"),
+    };
+  }
+
+  /* ── Chart ── */
+  const NS = "http://www.w3.org/2000/svg";
+  const mk = (tag, at) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); return e; };
+  const plot = document.querySelector(".plot");
+  const svg = plot.querySelector("svg");
+  const hit = plot.querySelector(".hit");
+  const tip = plot.querySelector(".tip");
+  let hover = null;
+
+  function renderChart() {
+    const T = theme();
+    const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+    const W = vb[2], H = vb[3];
+    const P = { t: 26, r: 100, b: 74, l: 86 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b;
+
+    const real = (vals) => vals.map((v, i) => v / ROWS[i].infl);
+    const LO = real(BAND.p25), HI = real(BAND.p75);
+    const TOT = real(ROWS.map(r => r.total));
+
+    const yMax = Math.max(Math.max(...HI), Math.max(...TOT)) * 1.08;
+    const x = (i) => P.l + (i / (ROWS.length - 1)) * iw;
+    const y = (v) => P.t + ih - (Math.max(v, 0) / yMax) * ih;
+    const line = (vals) => vals.map((d, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(d).toFixed(1)).join(" ");
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const defs = mk("defs", {});
+    const pat = mk("pattern", { id: "hatch", width: "6", height: "6",
+      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    pat.appendChild(mk("line", { x1: "0", y1: "0", x2: "0", y2: "6",
+      stroke: T.series[0], "stroke-width": "1", "stroke-opacity": "0.24" }));
+    defs.appendChild(pat);
+    svg.appendChild(defs);
+
+    /* grid + y labels */
+    for (let i = 0; i <= 5; i++) {
+      const val = (yMax / 5) * i, yy = y(val);
+      svg.appendChild(mk("line", { x1: P.l, y1: yy, x2: W - P.r, y2: yy,
+        stroke: T.rule, "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+      const t = mk("text", { x: P.l - 12, y: yy + 5, "text-anchor": "end",
+        fill: T.ink3, "font-family": T.font, "font-size": 15 });
+      t.textContent = i === 0 ? "0" : fmtK(val);
+      svg.appendChild(t);
+    }
+
+    /* simulated band */
+    const bandPath = line(HI) + " " + LO.map((d, i) => {
+      const j = LO.length - 1 - i;
+      return "L" + x(j).toFixed(1) + " " + y(LO[j]).toFixed(1);
+    }).join(" ") + " Z";
+    svg.appendChild(mk("path", { d: bandPath, fill: "url(#hatch)", stroke: "none" }));
+    [HI, LO].forEach(s => svg.appendChild(mk("path", { d: line(s), fill: "none",
+      stroke: T.series[0], "stroke-width": 1, "stroke-opacity": 0.5,
+      "stroke-dasharray": "3 4", "vector-effect": "non-scaling-stroke" })));
+
+    /* account lines, then total */
+    ACCOUNTS.forEach((a, i) => svg.appendChild(mk("path", {
+      d: line(real(ROWS.map(r => r.bal[a.id]))), fill: "none",
+      stroke: T.series[i], "stroke-width": 1.4, "stroke-opacity": 0.9,
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke" })));
+    svg.appendChild(mk("path", { d: line(TOT), fill: "none", stroke: T.ink,
+      "stroke-width": 2.2, "stroke-linecap": "round", "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke" }));
+
+    /* retirement rule + the one direct label */
+    const rx = x(RETIRE_I);
+    svg.appendChild(mk("line", { x1: rx, y1: P.t - 6, x2: rx, y2: P.t + ih,
+      stroke: T.accent, "stroke-width": 1.5, "stroke-dasharray": "5 4",
+      "vector-effect": "non-scaling-stroke" }));
+    const flag = mk("text", { x: rx + 8, y: P.t + 6, fill: T.accent,
+      "font-family": T.font, "font-size": 15 });
+    flag.textContent = "retires at 65";
+    svg.appendChild(flag);
+
+    const peak = TOT[RETIRE_I];
+    svg.appendChild(mk("circle", { cx: rx, cy: y(peak), r: 4.5, fill: T.plate,
+      stroke: T.ink, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke" }));
+    const pk = mk("text", { x: rx + 9, y: y(peak) - 13, fill: T.ink,
+      "font-family": T.font, "font-size": 18 });
+    pk.textContent = fmt(peak);
+    svg.appendChild(pk);
+
+    /* x axis */
+    ROWS.forEach((r, i) => {
+      if (r.age % 5 !== 0) return;
+      const t = mk("text", { x: x(i), y: P.t + ih + 26, "text-anchor": "middle",
+        fill: T.ink3, "font-family": T.font, "font-size": 15 });
+      t.textContent = r.age;
+      svg.appendChild(t);
+    });
+    const ax = mk("text", { x: P.l, y: P.t + ih + 52, fill: T.ink3,
+      "font-family": T.font, "font-size": 13, "letter-spacing": "0.1em" });
+    ax.textContent = "AGE";
+    svg.appendChild(ax);
+
+    /* hover layer */
+    const cross = mk("line", { x1: 0, y1: P.t, x2: 0, y2: P.t + ih, stroke: T.ink3,
+      "stroke-width": 1, "stroke-opacity": 0, "vector-effect": "non-scaling-stroke" });
+    svg.appendChild(cross);
+    const dots = ACCOUNTS.map((a, i) => {
+      const c = mk("circle", { r: 4, fill: T.series[i], stroke: T.plate,
+        "stroke-width": 2, opacity: 0, "vector-effect": "non-scaling-stroke" });
+      svg.appendChild(c); return c;
+    });
+
+    hover = function (ev) {
+      const rect = hit.getBoundingClientRect();
+      const px = ((ev.clientX - rect.left) / rect.width) * W;
+      const i = Math.max(0, Math.min(ROWS.length - 1, Math.round(((px - P.l) / iw) * (ROWS.length - 1))));
+      const r = ROWS[i], gx = x(i), k = r.infl;
+
+      cross.setAttribute("x1", gx); cross.setAttribute("x2", gx);
+      cross.setAttribute("stroke-opacity", 0.45);
+      ACCOUNTS.forEach((a, n) => {
+        dots[n].setAttribute("cx", gx);
+        dots[n].setAttribute("cy", y(r.bal[a.id] / k));
+        dots[n].setAttribute("opacity", 1);
+      });
+
+      tip.innerHTML =
+        '<div class="tip-age">Age ' + r.age + (r.age === CFG.retireAge ? " · retires" : "") + "</div>" +
+        ACCOUNTS.map((a, n) =>
+          '<div class="tip-row"><span class="k"><span class="tip-dot" style="background:' + T.series[n] + '"></span>' +
+          a.owner + " " + a.name + '</span><span class="v">' + fmtK(r.bal[a.id] / k) + "</span></div>").join("") +
+        '<div class="tip-rule"></div>' +
+        '<div class="tip-row"><span class="k">Total</span><span class="v">' + fmt(r.total / k) + "</span></div>" +
+        (r.wd > 0
+          ? '<div class="tip-row"><span class="k">Withdrawn</span><span class="v">' + fmt(r.wd / k) + "</span></div>" +
+            '<div class="tip-row"><span class="k">of which tax</span><span class="v">' + fmt(r.tax / k) + "</span></div>"
+          : "");
+
+      tip.classList.add("on");
+      const left = (gx / W) * rect.width;
+      const flip = (gx / W) > 0.62;
+      const want = flip ? left - tip.offsetWidth - 16 : left + 16;
+      /* Clamp inside the plot: on a narrow viewport an unclamped tooltip pushes
+         the page sideways, and a stale one survives a resize. */
+      tip.style.left = Math.max(0, Math.min(want, rect.width - tip.offsetWidth)) + "px";
+      tip.style.top = Math.max(6, (y(r.total / k) / H) * rect.height - tip.offsetHeight / 2) + "px";
+    };
+
+    svg._leave = function () {
+      cross.setAttribute("stroke-opacity", 0);
+      dots.forEach(d => d.setAttribute("opacity", 0));
+      tip.classList.remove("on");
+    };
+  }
+
+  hit.addEventListener("pointermove", (e) => hover && hover(e));
+  hit.addEventListener("pointerleave", () => svg._leave && svg._leave());
+  window.addEventListener("resize", () => svg._leave && svg._leave());
+
+  /* ── Panels ── */
+  function renderLegend() {
+    const T = theme();
+    document.getElementById("legend").innerHTML =
+      '<span class="li"><span class="sw" style="background:' + T.ink + ';height:.2rem"></span>Total</span>' +
+      ACCOUNTS.map((a, i) => '<span class="li"><span class="sw" style="background:' + T.series[i] + '"></span>' +
+        a.owner + " " + a.name + "</span>").join("") +
+      '<span class="li"><span class="sw band" style="background:' + T.series[0] + '"></span>25th–75th simulated</span>';
+  }
+
+  function renderAccounts() {
+    const T = theme();
+    const owners = [];
+    ACCOUNTS.forEach(a => { if (!owners.includes(a.owner)) owners.push(a.owner); });
+    document.getElementById("accounts").innerHTML = owners.map(o =>
+      '<div class="owner-hd">' + o + "</div>" +
+      ACCOUNTS.filter(a => a.owner === o).map((a) => {
+        const i = ACCOUNTS.indexOf(a);
+        return '<div class="acct" data-open="' + (a.id === "prot") + '">' +
+          '<button class="acct-head" type="button" aria-expanded="' + (a.id === "prot") + '" aria-controls="body-' + a.id + '">' +
+            '<span class="chev">&#9654;</span>' +
+            '<span class="sw" style="background:' + T.series[i] + '"></span>' +
+            '<span class="nm">' + a.name + "<small>" + a.taxLabel + "</small></span>" +
+            '<span class="amt">' + fmt(a.balance) + "</span>" +
+          "</button>" +
+          '<div class="acct-body" id="body-' + a.id + '">' +
+            fld("Owner", a.owner, "text") +
+            sel("Tax treatment", ["Pre-tax", "Post-tax / Roth", "Taxable"], a.taxLabel === "Post-tax" ? 1 : a.taxLabel === "Taxable" ? 2 : 0) +
+            fld("Balance", fmt(a.balance)) +
+            fld("Monthly contribution", fmt(a.contribution)) +
+            (a.tax === "pretax" ? fld("Employer match", a.matchPct + "%") + fld("Match cap", a.matchCap + "%") : "") +
+            fld("Annual return", a.ret + "%") +
+            fld("Volatility", a.vol + "%") +
+          "</div></div>";
+      }).join("")).join("");
+
+    document.querySelectorAll(".acct-head").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const card = btn.closest(".acct");
+        const open = card.dataset.open !== "true";
+        card.dataset.open = String(open);
+        btn.setAttribute("aria-expanded", String(open));
+      });
+    });
+  }
+  let uid = 0;
+  function fld(label, value, type) {
+    const id = "f" + (++uid);
+    return '<div class="fld"><label for="' + id + '">' + label + '</label>' +
+      '<input id="' + id + '" type="' + (type || "text") + '" value="' + value + '"></div>';
+  }
+  function sel(label, opts, chosen) {
+    const id = "f" + (++uid);
+    return '<div class="fld"><label for="' + id + '">' + label + '</label><select id="' + id + '">' +
+      opts.map((o, i) => '<option' + (i === chosen ? " selected" : "") + ">" + o + "</option>").join("") +
+      "</select></div>";
+  }
+
+  const BUCKETS = [
+    { key: "pretax",  label: "Pre-tax" },
+    { key: "roth",    label: "Roth" },
+    { key: "taxable", label: "Taxable" },
+  ];
+  const TOTBAL = BUCKETS.reduce((s, b) => s + INC.byTax[b.key].bal, 0);
+
+  function renderTax() {
+    const T = theme();
+
+    /* One stacked bar carries the mix at a glance; the rows below carry the
+       exact figures. 2px surface gaps keep adjacent segments legible. */
+    document.getElementById("taxbar").innerHTML =
+      '<div class="track">' + BUCKETS.map((b, i) => {
+        const pc = (INC.byTax[b.key].bal / TOTBAL) * 100;
+        return '<div class="seg" style="flex:' + pc.toFixed(2) + ';background:' + T.series[i] +
+          ';opacity:.85" title="' + b.label + ' ' + pc.toFixed(1) + '%"></div>';
+      }).join("") + "</div>" +
+      '<div class="keys">' + BUCKETS.map((b, i) => {
+        const d = INC.byTax[b.key], pc = (d.bal / TOTBAL) * 100;
+        return '<span class="key"><span class="dot" style="background:' + T.series[i] + '"></span>' +
+          b.label + ' <b>' + fmtK(d.bal) + '</b> <span class="pc">' + pc.toFixed(0) + '%</span></span>';
+      }).join("") + "</div>";
+    document.getElementById("taxrows").innerHTML =
+      '<div class="lr head"><span>Treatment</span><span>Balance</span><span>Monthly tax</span></div>' +
+      BUCKETS.map((b, i) => {
+        const d = INC.byTax[b.key];
+        return '<div class="lr"><span class="nm"><span class="sw" style="background:' + T.series[i] + '"></span>' +
+          b.label + '</span><span class="amt">' + fmt(d.bal) + "</span>" +
+          '<span class="tax">' + (d.tax > 0.5 ? fmt(d.tax) : "—") + "</span></div>";
+      }).join("") +
+      '<div class="lr total"><span class="nm">Total</span><span class="amt">' + fmt(TOTBAL) +
+      '</span><span class="tax">' + fmt(INC.tax) + "</span></div>";
+  }
+
+  /* Facing pages: every year is on screen at once, the way a ledger spread
+     works, instead of one sparse column or a scrolling box that hides the
+     drawdown years you actually came to look at. */
+  function renderTable() {
+    const half = Math.ceil(ROWS.length / 2);
+    const head = "<thead><tr>" + ["Age", "Owner A", "Owner B", "Total", "Withdrawn", "Tax"]
+      .map(h => "<th>" + h + "</th>").join("") + "</tr></thead>";
+    const body = (rows) => "<tbody>" + rows.map(r => {
+      const k = r.infl;
+      return '<tr class="' + (r.age === CFG.retireAge ? "mark" : "") + '">' +
+        [r.age, fmtK(r.peter / k), fmtK(r.lisa / k), fmtK(r.total / k),
+         r.wd ? fmtK(r.wd / k) : "—", r.tax ? fmtK(r.tax / k) : "—"]
+        .map(c => "<td>" + c + "</td>").join("") + "</tr>";
+    }).join("") + "</tbody>";
+    document.getElementById("tbl-a").innerHTML = head + body(ROWS.slice(0, half));
+    document.getElementById("tbl-b").innerHTML = head + body(ROWS.slice(half));
+  }
+
+  /* ── Figures ── */
+  const R = ROWS[RETIRE_I];
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set("f1", fmt(R.total / R.infl));
+  set("f2", fmt(R.total));
+  set("f3", fmt(INC.net));
+  function renderMonteCarlo() {
+    set("f4", (BAND.successRate * 100).toFixed(1) + "%");
+    set("f4n", Math.round(BAND.successRate * BAND.trials).toLocaleString("en-US") + " of " +
+      BAND.trials.toLocaleString("en-US") + " paths funded at 90 · poor market ends at " +
+      fmtK(BAND.p10 / ROWS[ROWS.length - 1].infl));
+  }
+  renderMonteCarlo();
+
+  /* Closed panels still have to be legible. The digest keeps the values that
+     drive the projection on screen, so hiding the controls does not hide the
+     facts — you always know what the chart is assuming. */
+  set("digest", "Retires " + CFG.retireAge + " · " + fmt(CFG.monthlyExpenses) + "/mo · " +
+    (CFG.inflation * 100) + "% inflation · " + (CFG.taxRate * 100) + "% tax · SS " +
+    fmt(CFG.ssMonthly) + " at " + CFG.ssStartAge + " · " + ACCOUNTS.length + " accounts");
+
+  /* ── Drawers ── */
+  const PANELS = [
+    { btn: document.getElementById("btn-plan"), el: document.getElementById("drawer-plan") },
+    { btn: document.getElementById("btn-acct"), el: document.getElementById("drawer-acct") },
+  ];
+
+  function setPanel(target, open) {
+    PANELS.forEach(pn => {
+      const on = open && pn === target;
+      pn.btn.setAttribute("aria-expanded", String(on));
+      if (on) {
+        pn.el.hidden = false;
+        /* let the browser apply hidden=false before the transform transitions */
+        requestAnimationFrame(() => pn.el.classList.add("on"));
+      } else {
+        pn.el.classList.remove("on");
+      }
+    });
+    if (open && target) {
+      const first = target.el.querySelector("input, select, button");
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+
+  PANELS.forEach(pn => {
+    pn.btn.addEventListener("click", () => {
+      setPanel(pn, pn.btn.getAttribute("aria-expanded") !== "true");
+    });
+    pn.el.querySelector(".drawer-close").addEventListener("click", () => {
+      setPanel(null, false);
+      pn.btn.focus();
+    });
+    /* Keep closed drawers out of the tab order without killing the slide-out */
+    pn.el.addEventListener("transitionend", (e) => {
+      if (e.propertyName === "transform" && !pn.el.classList.contains("on")) pn.el.hidden = true;
+    });
+  });
+
+  const anyOpen = () => PANELS.some(pn => pn.btn.getAttribute("aria-expanded") === "true");
+
+  /* Click away to close, but never swallow the click: no blocking overlay means
+     the toolbar keeps working and the chart stays fully visible while you edit. */
+  document.addEventListener("pointerdown", (e) => {
+    if (!anyOpen()) return;
+    const inside = PANELS.some(pn => pn.el.contains(e.target) || pn.btn.contains(e.target));
+    if (!inside) setPanel(null, false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && anyOpen()) {
+      const open = PANELS.find(pn => pn.btn.getAttribute("aria-expanded") === "true");
+      setPanel(null, false);
+      if (open) open.btn.focus();
+    }
+  });
+
+  /* ── Paper switching ── */
+  function renderAll() { renderChart(); renderLegend(); renderAccounts(); renderTax(); renderTable(); }
+  renderAll();
+
+  /* ── Monte Carlo ──
+     The chart's band and the success figure are simulation output, so the
+     control that produces them sits with the rest of the run state rather than
+     being buried in a settings panel. Each run reseeds, so re-running with the
+     same inputs shows how much of the answer is sampling noise. */
+  const mcRun = document.getElementById("mc-run");
+  const mcCount = document.getElementById("mc-count");
+  const mcState = document.getElementById("mc-state");
+  const mcBar = document.getElementById("mc-bar");
+  const mcFill = mcBar.querySelector("i");
+  let mcSeed = 0x9e3779b9;
+  let mcBusy = false;
+
+  function mcIdle(text, stale) {
+    mcState.textContent = text;
+    mcState.classList.toggle("stale", !!stale);
+  }
+  mcIdle(BAND.trials.toLocaleString("en-US") + " trials · seeded, so a re-run only moves on new draws");
+
+  async function runSimulation() {
+    if (mcBusy) return;
+    mcBusy = true;
+    const trials = parseInt(mcCount.value, 10) || 2000;
+    mcRun.disabled = true;
+    mcRun.textContent = "Running…";
+    mcBar.hidden = false;
+    mcFill.style.width = "0%";
+    mcIdle("Simulating " + trials.toLocaleString("en-US") + " paths…");
+
+    mcSeed = (mcSeed + 0x6d2b79f5) >>> 0;
+    BAND = await bandsAsync(trials, mcSeed, (f) => { mcFill.style.width = (f * 100).toFixed(1) + "%"; });
+
+    renderChart();
+    renderMonteCarlo();
+    mcBar.hidden = true;
+    mcRun.disabled = false;
+    mcRun.textContent = "Run simulation";
+    mcIdle(trials.toLocaleString("en-US") + " trials · new draws each run");
+    mcBusy = false;
+  }
+
+  mcRun.addEventListener("click", runSimulation);
+  mcCount.addEventListener("change", () =>
+    mcIdle("Trial count changed — re-run to update the band", true));
+
+})();
+</script>
