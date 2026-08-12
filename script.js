@@ -13,14 +13,8 @@
 
   const DEFAULT_VOLATILITY = 15;
 
-  const ACCOUNT_COLORS = [
-    "#2563eb", "#10b981", "#f59e0b", "#6366f1",
-    "#ef4444", "#06b6d4", "#ec4899", "#8b5cf6",
-  ];
-
   let accounts = [];
   let nextId = 1;
-  let chart = null;
 
   // Latest Monte Carlo results ({ bands, successRate, ... }) plus run state
   let mcResults = null;
@@ -50,31 +44,56 @@
     globalReturn:   $("#globalReturn"),
     globalReturnLabel: $("#globalReturnLabel"),
     ownerNames:     $("#ownerNames"),
+
     mcTrials:       $("#mcTrials"),
     runMcBtn:       $("#runMcBtn"),
+    mcState:        $("#mcState"),
     mcProgress:     $("#mcProgress"),
     mcProgressBar:  $("#mcProgressBar"),
-    mcEmpty:        $("#mcEmpty"),
-    mcStale:        $("#mcStale"),
-    mcResultsBox:   $("#mcResults"),
     mcSuccessRate:  $("#mcSuccessRate"),
     mcSuccessNote:  $("#mcSuccessNote"),
-    mcMedianEnd:    $("#mcMedianEnd"),
-    mcP10End:       $("#mcP10End"),
-    mcP10Note:      $("#mcP10Note"),
-    mcDepletionAge: $("#mcDepletionAge"),
-    mcDepletionNote:$("#mcDepletionNote"),
+
     accountsList:   $("#accountsList"),
     addBtn:         $("#addAccountBtn"),
     templateSelect: $("#accountTemplate"),
+
+    digest:         $("#digest"),
+    filedFor:       $("#filedFor"),
     summaryTotal:   $("#totalAtRetirement"),
     summaryAdj:     $("#inflationAdjusted"),
     summaryIncome:  $("#monthlyIncome"),
-    summaryCoverage:$("#yearsCoverage"),
-    tableHeader:    $("#tableHeader"),
-    tableBody:      $("#tableBody"),
-    taxSummary:     $("#taxSummary"),
+
+    plot:           $("#plot"),
+    chartSvg:       $("#projectionChart"),
+    chartLegend:    $("#chartLegend"),
+    tip:            $("#plot .tip"),
+    hit:            $("#plot .hit"),
+
+    taxBar:         $("#taxBar"),
+    taxRows:        $("#taxRows"),
+    taxNote:        $("#taxNote"),
+    tableA:         $("#yearTableA"),
+    tableB:         $("#yearTableB"),
+
+    btnPlan:        $("#btnPlan"),
+    btnAccounts:    $("#btnAccounts"),
+    drawerPlan:     $("#drawerPlan"),
+    drawerAccounts: $("#drawerAccounts"),
   };
+
+  // The account line colours, read from the stylesheet so the palette lives
+  // in one place instead of being duplicated in JS.
+  const ACCOUNT_COLORS = (() => {
+    const cs = getComputedStyle(document.documentElement);
+    return [1, 2, 3, 4, 5, 6, 7, 8]
+      .map((n) => cs.getPropertyValue("--s" + n).trim())
+      .filter(Boolean);
+  })();
+
+  function inkVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
 
   // ── Storage Key ──
   const STORAGE_KEY = "retirementPlannerState";
@@ -193,16 +212,8 @@
 
   function updateStrategyVisibility() {
     const strategy = el.withdrawalStrategy.value;
-    if (strategy === "fixed") {
-      el.expensesLabel.style.display = "";
-      el.withdrawalPctLabel.style.display = "none";
-    } else if (strategy === "4pct") {
-      el.expensesLabel.style.display = "none";
-      el.withdrawalPctLabel.style.display = "none";
-    } else {
-      el.expensesLabel.style.display = "none";
-      el.withdrawalPctLabel.style.display = "";
-    }
+    el.expensesLabel.hidden = strategy !== "fixed";
+    el.withdrawalPctLabel.hidden = strategy !== "pct";
   }
 
   function saveState() {
@@ -301,24 +312,26 @@
   function renderAccountsList() {
     el.accountsList.innerHTML = "";
 
+    if (accounts.length === 0) {
+      el.accountsList.innerHTML =
+        '<p class="empty-note">No accounts yet. Pick a type below and add one to start the projection.</p>';
+      refreshOwnerDatalist();
+      return;
+    }
+
     const owners = distinctOwners();
     const showGroups = owners.length > 1;
 
     owners.forEach((owner) => {
-      let container = el.accountsList;
       if (showGroups) {
-        const group = document.createElement("div");
-        group.className = "owner-group";
-        const header = document.createElement("div");
-        header.className = "owner-group-header";
-        header.innerHTML = `<span>${escapeHtml(owner)}</span>`;
-        group.appendChild(header);
-        el.accountsList.appendChild(group);
-        container = group;
+        const hd = document.createElement("div");
+        hd.className = "owner-hd";
+        hd.textContent = owner;
+        el.accountsList.appendChild(hd);
       }
       accounts
         .filter((a) => ownerLabel(a.owner) === owner)
-        .forEach((acc) => container.appendChild(buildAccountCard(acc, showGroups)));
+        .forEach((acc) => el.accountsList.appendChild(buildAccountCard(acc, showGroups)));
     });
 
     refreshOwnerDatalist();
@@ -333,9 +346,14 @@
 
   function buildAccountCard(acc, inOwnerGroup) {
     const tpl = $("#accountTemplate-tpl").content.cloneNode(true);
-    const card = tpl.querySelector(".account-card");
+    const card = tpl.querySelector(".acct");
+    const idx = accounts.indexOf(acc);
     card.dataset.id = acc.id;
-    if (acc.collapsed) card.classList.add("collapsed");
+    card.dataset.open = String(!acc.collapsed && accounts.length <= 2);
+    card.style.setProperty("--sc", ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]);
+
+    const head = card.querySelector(".acct-head");
+    head.setAttribute("aria-expanded", card.dataset.open);
 
     card.querySelector(".account-name-display").textContent = acc.name;
     card.querySelector(".acc-name").value = acc.name;
@@ -347,35 +365,25 @@
     card.querySelector(".acc-match-cap").value = acc.matchCap;
     card.querySelector(".acc-return").value = acc.annualReturn;
     card.querySelector(".acc-volatility").value = acc.volatility;
+    card.querySelector(".amt").textContent = fmt(acc.balance);
 
     updateBadge(card, acc.tax);
     updateMatchVisibility(card, acc.tax);
     updateReturnOverrideUI(card);
-    // The group heading already names the owner — repeating it on every card is noise.
-    updateOwnerChip(card, acc.owner, inOwnerGroup);
 
-    function toggleCollapse() {
-      card.classList.toggle("collapsed");
-      acc.collapsed = card.classList.contains("collapsed");
+    head.addEventListener("click", () => {
+      const open = card.dataset.open !== "true";
+      card.dataset.open = String(open);
+      head.setAttribute("aria-expanded", String(open));
+      acc.collapsed = !open;
       saveState();
-    }
-
-    card.querySelector(".collapse-toggle").addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleCollapse();
     });
-
-    card.querySelector(".account-header").addEventListener("click", toggleCollapse);
-
-    // Keep clicks inside the form from bubbling up to the header's collapse handler
-    card.querySelector(".account-body").addEventListener("click", (e) => e.stopPropagation());
 
     card.querySelector(".remove-btn").addEventListener("click", (e) => {
       e.stopPropagation();
       removeAccount(acc.id);
     });
 
-    // Input changes
     card.querySelectorAll("input, select").forEach((inp) => {
       inp.addEventListener("input", () => syncAccount(acc.id, card));
     });
@@ -407,26 +415,19 @@
     acc.volatility = getVal(card.querySelector(".acc-volatility"));
 
     card.querySelector(".account-name-display").textContent = acc.name;
+    card.querySelector(".amt").textContent = fmt(acc.balance);
     updateBadge(card, acc.tax);
     updateMatchVisibility(card, acc.tax);
-    updateOwnerChip(card, acc.owner, !!card.closest(".owner-group"));
     refreshOwnerDatalist();
     recalculate();
     saveState();
   }
 
-  function updateOwnerChip(card, owner, inOwnerGroup) {
-    const chip = card.querySelector(".owner-chip");
-    const show = !inOwnerGroup && owner && owner.trim();
-    chip.textContent = show ? owner.trim() : "";
-    chip.hidden = !show;
-  }
+  function updateOwnerChip() { /* owner is shown as a group heading now */ }
 
   function updateBadge(card, tax) {
-    const badge = card.querySelector(".tax-badge");
-    badge.className = "tax-badge " + tax;
     const labels = { pretax: "Pre-tax", roth: "Roth", taxable: "Taxable" };
-    badge.textContent = labels[tax] || tax;
+    card.querySelector(".tax-badge").textContent = labels[tax] || tax;
   }
 
   function updateMatchVisibility(card, tax) {
@@ -462,8 +463,7 @@
   }
 
   function applyReturnOverrideToCards() {
-    $$(".account-card").forEach(updateReturnOverrideUI);
-    el.globalReturnLabel.classList.toggle("is-active", el.globalReturnEnabled.checked);
+    $$(".acct").forEach(updateReturnOverrideUI);
   }
 
   // ── Calculation Engine ──
@@ -686,21 +686,12 @@
 
     // Sustainable monthly income from savings, in today's dollars
     const retirementYears = lifeExp - retireAge;
-    const income = computeRetirementIncome(retireRow.balances, cfg);
-
-    // Years of coverage: find when total hits 0
-    let coverageYears = retirementYears;
-    for (let i = retireIdx; i < yearlyData.length; i++) {
-      if (yearlyData[i].total <= 0) {
-        coverageYears = yearlyData[i].age - retireAge;
-        break;
-      }
-    }
+    const income = computeRetirementIncome(retireRow.balances, cfg, retireRow.inflFactor);
 
     el.summaryTotal.textContent = fmt(totalAtRetire);
     el.summaryAdj.textContent = fmt(inflAdj);
     el.summaryIncome.textContent = fmt(income.netMonthly);
-    el.summaryCoverage.textContent = coverageYears + (coverageYears >= retirementYears ? "+" : "") + " yrs";
+    renderDigest(cfg);
 
     renderChart(yearlyData, retireAge);
     renderTable(yearlyData, retireAge);
@@ -723,8 +714,12 @@
   }
 
   // Sustainable monthly retirement income in today's dollars, split by tax treatment.
-  function computeRetirementIncome(balances, cfg) {
+  function computeRetirementIncome(balances, cfg, toToday) {
     const months = Math.max(cfg.lifeExp - cfg.retireAge, 0) * 12;
+    // Payments come out in retirement-year dollars; divide through by the
+    // inflation factor to retirement so they are quoted in today's money like
+    // everything else. Skipping this overstates income badly on a long runway.
+    const k = toToday || 1;
     const byTax = {
       pretax:  { balance: 0, gross: 0, tax: 0, net: 0 },
       roth:    { balance: 0, gross: 0, tax: 0, net: 0 },
@@ -734,9 +729,9 @@
     cfg.accounts.forEach((acc) => {
       const bucket = byTax[acc.tax] || byTax.taxable;
       const balance = balances[acc.id] || 0;
-      const gross = annuityMonthlyPayment(balance, acc.annualReturn, cfg.inflationPct, months);
+      const gross = annuityMonthlyPayment(balance, acc.annualReturn, cfg.inflationPct, months) / k;
       const tax = gross * effectiveTaxRate(acc, cfg.taxRatePct);
-      bucket.balance += balance;
+      bucket.balance += balance / k;
       bucket.gross += gross;
       bucket.tax += tax;
       bucket.net += gross - tax;
@@ -755,6 +750,31 @@
       ssActive,
       ssMonthly,
     };
+  }
+
+  // Closed drawers hide the controls, never the facts — the digest keeps every
+  // value that drives the projection on screen.
+  function renderDigest(cfg) {
+    if (!cfg) { el.digest.textContent = ""; el.filedFor.textContent = "your plan"; return; }
+
+    const strategy = {
+      fixed: fmt(cfg.monthlyExpenses) + "/mo",
+      "4pct": "4% rule",
+      pct: (cfg.withdrawalPct * 100).toFixed(1) + "% of balance",
+    }[cfg.strategy] || "";
+
+    el.digest.textContent = [
+      "Age " + cfg.currentAge + " → " + cfg.lifeExp,
+      "retires " + cfg.retireAge,
+      strategy,
+      (cfg.inflationPct * 100).toFixed(1).replace(/\.0$/, "") + "% inflation",
+      (cfg.taxRatePct * 100).toFixed(0) + "% tax",
+      "SS " + fmt(cfg.ssMonthly) + " at " + cfg.ssStartAge,
+      cfg.accounts.length + (cfg.accounts.length === 1 ? " account" : " accounts"),
+    ].filter(Boolean).join(" · ");
+
+    const owners = distinctOwners().filter((o) => o !== UNASSIGNED);
+    el.filedFor.textContent = owners.length ? owners.join(" & ") : "your plan";
   }
 
   // ── Monte Carlo ──
@@ -868,8 +888,8 @@
     mcRunning = true;
     el.runMcBtn.disabled = true;
     el.runMcBtn.textContent = "Running…";
+    setMcState("Simulating " + trials.toLocaleString("en-US") + " paths…");
     el.mcProgress.hidden = false;
-    el.mcStale.hidden = true;
     setMcProgress(0);
 
     function step() {
@@ -892,15 +912,19 @@
     }
 
     function finish() {
-      const p10 = [], p50 = [], p90 = [];
+      // The chart bands the interquartile range; the 10th percentile is kept as
+      // a single end-of-plan figure rather than a line that flattens the chart.
+      const p25 = [], p75 = [];
       for (let y = 0; y < years; y++) {
         const col = totalsByYear[y];
         col.sort(); // typed arrays sort numerically
-        p10.push(percentileOf(col, 0.10));
-        p50.push(percentileOf(col, 0.50));
-        p90.push(percentileOf(col, 0.90));
+        p25.push(percentileOf(col, 0.25));
+        p75.push(percentileOf(col, 0.75));
       }
       depletionAges.sort((a, b) => a - b);
+
+      const lastCol = totalsByYear[years - 1];
+      const lastInfl = Math.pow(1 + cfg.inflationPct, years - 1);
 
       mcResults = {
         trials,
@@ -910,14 +934,15 @@
           ? depletionAges[Math.floor(depletionAges.length / 2)]
           : null,
         lifeExp: cfg.lifeExp,
-        p10, p50, p90,
+        p25, p75,
+        p10End: percentileOf(lastCol, 0.10) / lastInfl,
         signature,
         stale: false,
       };
 
       mcRunning = false;
       el.runMcBtn.disabled = false;
-      el.runMcBtn.textContent = "Run Simulation";
+      el.runMcBtn.textContent = "Run simulation";
       el.mcProgress.hidden = true;
 
       // Inputs may have been edited while the run was in flight
@@ -932,236 +957,261 @@
   function markMonteCarloStale(cfg) {
     if (!mcResults) return;
     mcResults.stale = !cfg || JSON.stringify(cfg) !== mcResults.signature;
-    el.mcStale.hidden = !mcResults.stale;
   }
 
   function renderMonteCarlo() {
+    const box = el.mcSuccessRate;
+    box.classList.remove("level-good", "level-fair", "level-poor");
+
     if (!mcResults) {
-      el.mcResultsBox.hidden = true;
-      el.mcEmpty.hidden = false;
-      el.mcStale.hidden = true;
+      box.textContent = "—";
+      el.mcSuccessNote.textContent = "Run a simulation to test the plan against random markets";
+      setMcState(Number(el.mcTrials.value).toLocaleString("en-US") + " trials ready");
       return;
     }
 
     const r = mcResults;
     const n = (v) => v.toLocaleString("en-US");
-    el.mcEmpty.hidden = true;
-    el.mcResultsBox.hidden = false;
-    el.mcStale.hidden = !r.stale;
-
     const pct = r.successRate * 100;
-    el.mcSuccessRate.textContent = pct.toFixed(1) + "%";
+    box.textContent = pct.toFixed(1) + "%";
+    box.classList.add(pct >= 85 ? "level-good" : pct >= 70 ? "level-fair" : "level-poor");
 
-    const primary = el.mcResultsBox.querySelector(".mc-stat-primary");
-    primary.classList.remove("level-good", "level-fair", "level-poor");
-    primary.classList.add(pct >= 85 ? "level-good" : pct >= 70 ? "level-fair" : "level-poor");
     el.mcSuccessNote.textContent =
-      `${n(r.trials - r.failures)} of ${n(r.trials)} simulated paths still had money at age ${r.lifeExp}`;
+      n(r.trials - r.failures) + " of " + n(r.trials) + " paths funded at " + r.lifeExp +
+      " · poor market ends at " + fmtAxis(r.p10End) +
+      (r.medianDepletionAge !== null ? " · median depletion age " + r.medianDepletionAge : "");
 
-    el.mcMedianEnd.textContent = fmt(r.p50[r.p50.length - 1]);
+    setMcState(n(r.trials) + " trials", r.stale);
+  }
 
-    const p10End = r.p10[r.p10.length - 1];
-    el.mcP10End.textContent = fmt(p10End);
-    // "1 in 10 end below this" reads wrong at $0 — nothing ends below zero
-    el.mcP10Note.textContent = p10End > 0
-      ? "1 in 10 outcomes end below this"
-      : `More than 1 in 10 paths ran out entirely (${(r.failures / r.trials * 100).toFixed(1)}%)`;
-
-    if (r.medianDepletionAge === null) {
-      el.mcDepletionAge.textContent = "—";
-      el.mcDepletionNote.textContent = "No simulated path ran out of money";
-    } else {
-      el.mcDepletionAge.textContent = r.medianDepletionAge;
-      el.mcDepletionNote.textContent = `Median across the ${n(r.failures)} paths that ran out`;
-    }
+  function setMcState(text, stale) {
+    el.mcState.textContent = stale ? text + " — inputs changed, re-run" : text;
+    el.mcState.classList.toggle("stale", !!stale);
   }
 
   function clearOutputs() {
     el.summaryTotal.textContent = "$0";
     el.summaryAdj.textContent = "$0";
     el.summaryIncome.textContent = "$0";
-    el.summaryCoverage.textContent = "0 yrs";
-    el.tableBody.innerHTML = "";
-    el.tableHeader.innerHTML = "";
-    el.taxSummary.innerHTML = "";
-    if (chart) { chart.destroy(); chart = null; }
+    el.tableA.innerHTML = "";
+    el.tableB.innerHTML = "";
+    el.taxBar.innerHTML = "";
+    el.taxRows.innerHTML = "";
+    el.taxNote.innerHTML =
+      '<p class="empty-note">Add an account and set a birth date, retirement age and ' +
+      "life expectancy that make sense together, and the projection appears here.</p>";
+    while (el.chartSvg.firstChild) el.chartSvg.removeChild(el.chartSvg.firstChild);
+    el.chartLegend.innerHTML = "";
+    chartHover = null;
+    chartLeave = null;
+    el.tip.classList.remove("on");
+
     // Any simulation on screen described inputs that are no longer valid
     mcRunToken++;
     mcRunning = false;
     mcResults = null;
     el.runMcBtn.disabled = false;
-    el.runMcBtn.textContent = "Run Simulation";
+    el.runMcBtn.textContent = "Run simulation";
     el.mcProgress.hidden = true;
     renderMonteCarlo();
+    renderDigest(null);
   }
 
+
   // ── Chart ──
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const mkSvg = (tag, attrs) => {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  };
+
+  const fmtAxis = (n) => n >= 1e6 ? "$" + (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + "M"
+                       : n >= 1e3 ? "$" + Math.round(n / 1e3) + "k" : "$" + Math.round(n);
+
+  let chartHover = null;
+  let chartLeave = null;
+
+  // Balances are plotted in today's dollars. Over a 40-year horizon a nominal
+  // chart is dominated by inflation — a plan that merely holds its purchasing
+  // power looks like exponential growth — so the real series is the honest one.
   function renderChart(data, retireAge) {
-    // Chart.js comes from a CDN, so it is missing whenever the page is opened offline.
-    // Without this guard the throw propagates out of recalculate() and takes the table
-    // and tax panel down with it — the whole page goes blank over one failed request.
-    if (typeof Chart === "undefined") return;
+    const svg = el.chartSvg;
+    const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+    const W = vb[2], H = vb[3];
+    const P = { t: 26, r: 100, b: 74, l: 88 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b;
 
-    const ctx = document.getElementById("projectionChart");
-    const labels = data.map((d) => d.age);
+    const ink = inkVar("--ink"), ink3 = inkVar("--ink-3");
+    const rule2 = inkVar("--rule-2"), plate = inkVar("--plate");
+    const accent = inkVar("--accent"), band = ACCOUNT_COLORS[0];
 
-    const datasets = [];
+    const real = (vals) => vals.map((v, i) => v / data[i].inflFactor);
+    const totals = real(data.map((d) => d.total));
 
-    // Simulated range first so the band renders behind the projection lines.
-    // The shaded band covers the downside — 10th percentile up to the median — because
-    // that is the half the success rate is about. The 90th percentile is off by
-    // default: over decades its upper tail runs several times higher than every other
-    // series and flattens the whole chart against the axis. Click it in the legend to
-    // bring it in (hidden datasets are excluded from the axis scale).
-    if (mcResults && mcResults.p50.length === data.length) {
-      datasets.push({
-        label: "Median (simulated)",
-        data: mcResults.p50,
-        borderColor: "#6366f1",
-        backgroundColor: "rgba(99, 102, 241, 0.14)",
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: "+1", // shade down to the 10th percentile line that follows
-        tension: 0.3,
-      });
-      datasets.push({
-        label: "10th percentile",
-        data: mcResults.p10,
-        borderColor: "rgba(99, 102, 241, 0.45)",
-        backgroundColor: "transparent",
-        borderWidth: 1,
-        pointRadius: 0,
-        fill: false,
-        tension: 0.3,
-      });
-      datasets.push({
-        label: "90th percentile",
-        data: mcResults.p90,
-        borderColor: "rgba(99, 102, 241, 0.45)",
-        backgroundColor: "transparent",
-        borderWidth: 1,
-        borderDash: [2, 3],
-        pointRadius: 0,
-        fill: false,
-        tension: 0.3,
-        hidden: true,
-      });
+    // The simulated band is the interquartile range. A 10th-90th spread runs
+    // several times the projection over this horizon and squashes the line the
+    // chart exists to show; the downside figure lives in the stat instead.
+    const hasBand = mcResults && mcResults.p25 && mcResults.p25.length === data.length;
+    const LO = hasBand ? real(mcResults.p25) : null;
+    const HI = hasBand ? real(mcResults.p75) : null;
+
+    let yMax = Math.max(...totals);
+    if (hasBand) yMax = Math.max(yMax, Math.max(...HI));
+    yMax = (yMax || 1) * 1.08;
+
+    const x = (i) => P.l + (i / Math.max(data.length - 1, 1)) * iw;
+    const y = (v) => P.t + ih - (Math.max(v, 0) / yMax) * ih;
+    const line = (vals) => vals.map((d, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(d).toFixed(1)).join(" ");
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const defs = mkSvg("defs", {});
+    const pat = mkSvg("pattern", { id: "mcHatch", width: "6", height: "6",
+      patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    pat.appendChild(mkSvg("line", { x1: "0", y1: "0", x2: "0", y2: "6",
+      stroke: band, "stroke-width": "1", "stroke-opacity": "0.24" }));
+    defs.appendChild(pat);
+    svg.appendChild(defs);
+
+    for (let i = 0; i <= 5; i++) {
+      const val = (yMax / 5) * i, yy = y(val);
+      svg.appendChild(mkSvg("line", { x1: P.l, y1: yy, x2: W - P.r, y2: yy,
+        stroke: rule2, "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+      const t = mkSvg("text", { x: P.l - 12, y: yy + 5, "text-anchor": "end",
+        fill: ink3, "font-family": "var(--f-disp)", "font-size": 15 });
+      t.textContent = i === 0 ? "0" : fmtAxis(val);
+      svg.appendChild(t);
     }
 
-    const showOwnerInLegend = distinctOwners().length > 1;
-    accounts.forEach((acc, i) => datasets.push({
-      label: showOwnerInLegend ? `${ownerLabel(acc.owner)} — ${acc.name}` : acc.name,
-      data: data.map((d) => Math.max(d.balances[acc.id] || 0, 0)),
-      borderColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
-      backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] + "20",
-      borderWidth: 1.5,
-      borderDash: [6, 3],
-      pointRadius: 0,
-      fill: false,
-      tension: 0.3,
-    }));
+    if (hasBand) {
+      const bandPath = line(HI) + " " + LO.map((d, i) => {
+        const j = LO.length - 1 - i;
+        return "L" + x(j).toFixed(1) + " " + y(LO[j]).toFixed(1);
+      }).join(" ") + " Z";
+      svg.appendChild(mkSvg("path", { d: bandPath, fill: "url(#mcHatch)", stroke: "none" }));
+      [HI, LO].forEach((series) => svg.appendChild(mkSvg("path", {
+        d: line(series), fill: "none", stroke: band, "stroke-width": 1,
+        "stroke-opacity": 0.5, "stroke-dasharray": "3 4", "vector-effect": "non-scaling-stroke" })));
+    }
 
-    datasets.push({
-      label: "Total",
-      data: data.map((d) => Math.max(d.total, 0)),
-      borderColor: "#18181b",
-      backgroundColor: "rgba(24,24,27,0.06)",
-      borderWidth: 2.5,
-      pointRadius: 0,
-      fill: false,
-      tension: 0.3,
+    accounts.forEach((acc, i) => svg.appendChild(mkSvg("path", {
+      d: line(real(data.map((d) => Math.max(d.balances[acc.id] || 0, 0)))),
+      fill: "none", stroke: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
+      "stroke-width": 1.4, "stroke-opacity": 0.9,
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke" })));
+
+    svg.appendChild(mkSvg("path", { d: line(totals), fill: "none", stroke: ink,
+      "stroke-width": 2.2, "stroke-linecap": "round", "stroke-linejoin": "round",
+      "vector-effect": "non-scaling-stroke" }));
+
+    const retireI = data.findIndex((d) => d.age === retireAge);
+    if (retireI >= 0) {
+      const rx = x(retireI);
+      svg.appendChild(mkSvg("line", { x1: rx, y1: P.t - 6, x2: rx, y2: P.t + ih,
+        stroke: accent, "stroke-width": 1.5, "stroke-dasharray": "5 4",
+        "vector-effect": "non-scaling-stroke" }));
+      const flag = mkSvg("text", { x: rx + 8, y: P.t + 6, fill: accent,
+        "font-family": "var(--f-disp)", "font-size": 15 });
+      flag.textContent = "retires at " + retireAge;
+      svg.appendChild(flag);
+
+      const peak = totals[retireI];
+      svg.appendChild(mkSvg("circle", { cx: rx, cy: y(peak), r: 4.5, fill: plate,
+        stroke: ink, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke" }));
+      const pk = mkSvg("text", { x: rx - 10, y: y(peak) - 13, "text-anchor": "end", fill: ink,
+        "font-family": "var(--f-disp)", "font-size": 18 });
+      pk.textContent = fmt(peak);
+      svg.appendChild(pk);
+    }
+
+    data.forEach((d, i) => {
+      if (d.age % 5 !== 0) return;
+      const t = mkSvg("text", { x: x(i), y: P.t + ih + 26, "text-anchor": "middle",
+        fill: ink3, "font-family": "var(--f-disp)", "font-size": 15 });
+      t.textContent = d.age;
+      svg.appendChild(t);
+    });
+    const ax = mkSvg("text", { x: P.l, y: P.t + ih + 52, fill: ink3,
+      "font-family": "var(--f-disp)", "font-size": 13, "letter-spacing": "0.1em" });
+    ax.textContent = "AGE";
+    svg.appendChild(ax);
+
+    // ── Hover layer ──
+    const cross = mkSvg("line", { x1: 0, y1: P.t, x2: 0, y2: P.t + ih, stroke: ink3,
+      "stroke-width": 1, "stroke-opacity": 0, "vector-effect": "non-scaling-stroke" });
+    svg.appendChild(cross);
+    const dots = accounts.map((acc, i) => {
+      const c = mkSvg("circle", { r: 4, fill: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
+        stroke: plate, "stroke-width": 2, opacity: 0, "vector-effect": "non-scaling-stroke" });
+      svg.appendChild(c);
+      return c;
     });
 
-    // Dummy dataset so "Retirement" appears in the legend
-    datasets.push({
-      label: "Retirement Age",
-      data: [],
-      borderColor: "#ef4444",
-      backgroundColor: "#ef4444",
-      borderWidth: 2,
-      borderDash: [5, 5],
-      pointRadius: 0,
-      fill: false,
-    });
+    chartHover = function (ev) {
+      const rect = el.hit.getBoundingClientRect();
+      if (!rect.width) return;
+      const px = ((ev.clientX - rect.left) / rect.width) * W;
+      const i = Math.max(0, Math.min(data.length - 1,
+        Math.round(((px - P.l) / iw) * (data.length - 1))));
+      const row = data[i], gx = x(i), k = row.inflFactor;
 
-    const chartConfig = {
-      type: "line",
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          tooltip: {
-            filter: (item) => item.dataset.label !== "Retirement Age",
-            callbacks: {
-              label: (ctx) => ctx.dataset.label + ": " + fmt(ctx.parsed.y),
-            },
-          },
-          legend: {
-            align: "center",
-            labels: {
-              color: "#3f3f46",
-              generateLabels(chartInstance) {
-                const defaultLabels = Chart.defaults.plugins.legend.labels.generateLabels(chartInstance);
-                return defaultLabels.map((label) => {
-                  label.pointStyle = "line";
-                  if (label.text === "Retirement Age") {
-                    label.lineDash = [5, 5];
-                    label.strokeStyle = "#ef4444";
-                    label.fillStyle = "transparent";
-                  }
-                  return label;
-                });
-              },
-              usePointStyle: true,
-            },
-          },
-        },
-        scales: {
-          x: {
-            title: { display: true, text: "Age", color: "#71717a" },
-            ticks: { maxTicksLimit: 15, color: "#71717a" },
-            grid: { color: "rgba(9,9,11,0.06)" },
-          },
-          y: {
-            title: { display: true, text: "Portfolio Value", color: "#71717a" },
-            ticks: {
-              callback: (v) => fmt(v),
-              color: "#71717a",
-            },
-            grid: { color: "rgba(9,9,11,0.06)" },
-            min: 0,
-          },
-        },
-      },
-      plugins: [{
-        id: "retirementLine",
-        afterDraw(chartInstance) {
-          const xScale = chartInstance.scales.x;
-          const chartLabels = chartInstance.data.labels;
-          const idx = chartLabels.indexOf(retireAge);
-          if (idx < 0) return;
-          const x = xScale.getPixelForValue(idx);
-          const yScale = chartInstance.scales.y;
-          const drawCtx = chartInstance.ctx;
-          drawCtx.save();
-          drawCtx.strokeStyle = "#ef4444";
-          drawCtx.lineWidth = 2;
-          drawCtx.setLineDash([5, 5]);
-          drawCtx.beginPath();
-          drawCtx.moveTo(x, yScale.top);
-          drawCtx.lineTo(x, yScale.bottom);
-          drawCtx.stroke();
-          drawCtx.restore();
-        },
-      }],
+      cross.setAttribute("x1", gx);
+      cross.setAttribute("x2", gx);
+      cross.setAttribute("stroke-opacity", 0.45);
+      accounts.forEach((acc, n) => {
+        dots[n].setAttribute("cx", gx);
+        dots[n].setAttribute("cy", y(Math.max(row.balances[acc.id] || 0, 0) / k));
+        dots[n].setAttribute("opacity", 1);
+      });
+
+      el.tip.innerHTML =
+        '<div class="tip-age">Age ' + row.age + (row.age === retireAge ? " &middot; retires" : "") + "</div>" +
+        accounts.map((acc, n) =>
+          '<div class="tip-row"><span class="k"><span class="tip-dot" style="background:' +
+          ACCOUNT_COLORS[n % ACCOUNT_COLORS.length] + '"></span>' +
+          escapeHtml(acc.owner ? acc.owner + " " + acc.name : acc.name) +
+          '</span><span class="v">' + fmtAxis(Math.max(row.balances[acc.id] || 0, 0) / k) + "</span></div>"
+        ).join("") +
+        '<div class="tip-rule"></div>' +
+        '<div class="tip-row"><span class="k">Total</span><span class="v">' + fmt(row.total / k) + "</span></div>" +
+        (row.withdrawal > 0
+          ? '<div class="tip-row"><span class="k">Withdrawn</span><span class="v">' + fmt(row.withdrawal / k) + "</span></div>" +
+            '<div class="tip-row"><span class="k">of which tax</span><span class="v">' + fmt(row.tax / k) + "</span></div>"
+          : "");
+
+      el.tip.classList.add("on");
+      const left = (gx / W) * rect.width;
+      const want = (gx / W) > 0.62 ? left - el.tip.offsetWidth - 16 : left + 16;
+      // Clamp inside the plot: unclamped, the tooltip pushes the page sideways
+      // on a narrow viewport.
+      el.tip.style.left = Math.max(0, Math.min(want, rect.width - el.tip.offsetWidth)) + "px";
+      el.tip.style.top = Math.max(6, (y(row.total / k) / H) * rect.height - el.tip.offsetHeight / 2) + "px";
     };
 
-    if (chart) {
-      chart.destroy();
+    chartLeave = function () {
+      cross.setAttribute("stroke-opacity", 0);
+      dots.forEach((d) => d.setAttribute("opacity", 0));
+      el.tip.classList.remove("on");
+    };
+
+    renderLegend();
+  }
+
+  function renderLegend() {
+    const parts = ['<span class="li"><span class="sw" style="background:' + inkVar("--ink") +
+      ';height:.2rem"></span>Total</span>'];
+    accounts.forEach((acc, i) => {
+      parts.push('<span class="li"><span class="sw" style="background:' +
+        ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] + '"></span>' +
+        escapeHtml(acc.owner ? acc.owner + " " + acc.name : acc.name) + "</span>");
+    });
+    if (mcResults && mcResults.p25) {
+      parts.push('<span class="li"><span class="sw band" style="background:' +
+        ACCOUNT_COLORS[0] + '"></span>25th&ndash;75th simulated</span>');
     }
-    chart = new Chart(ctx, chartConfig);
+    el.chartLegend.innerHTML = parts.join("");
   }
 
   // ── Table ──
@@ -1182,81 +1232,88 @@
 
   function renderTable(data, retireAge) {
     const owners = ownerColumns();
+    const head = "<thead><tr><th>Age</th>" +
+      owners.map((o) => "<th>" + escapeHtml(o) + "</th>").join("") +
+      "<th>Total</th><th>Withdrawn</th><th>Tax</th></tr></thead>";
 
-    // Header
-    let headerHTML = "<th>Age</th>";
-    owners.forEach((o) => { headerHTML += `<th>${escapeHtml(o)} Total</th>`; });
-    headerHTML += "<th>Grand Total</th><th>Inf Adj Tot</th><th>Withdrawals</th><th>Inf Adj Withdrawals</th><th>Est. Tax</th>";
-    el.tableHeader.innerHTML = headerHTML;
+    const body = (rows) => "<tbody>" + rows.map((row) => {
+      const k = row.inflFactor;
+      const cells = [row.age]
+        .concat(owners.map((o) => fmtAxis(getOwnerTotal(row.balances, o) / k)))
+        .concat([
+          fmtAxis(row.total / k),
+          row.withdrawal > 0 ? fmtAxis(row.withdrawal / k) : "&mdash;",
+          row.tax > 0 ? fmtAxis(row.tax / k) : "&mdash;",
+        ]);
+      return '<tr class="' + (row.age === retireAge ? "retirement-row" : "") + '">' +
+        cells.map((c) => "<td>" + c + "</td>").join("") + "</tr>";
+    }).join("") + "</tbody>";
 
-    // Body
-    let bodyHTML = "";
-    data.forEach((row) => {
-      const cls = row.age === retireAge ? ' class="retirement-row"' : "";
-      bodyHTML += `<tr${cls}><td>${row.age}</td>`;
-      owners.forEach((o) => {
-        bodyHTML += `<td>${fmt(getOwnerTotal(row.balances, o))}</td>`;
-      });
-      const wd = row.withdrawal > 0 ? fmt(row.withdrawal) : "—";
-      const inflAdjWd = row.withdrawal > 0 ? fmt(row.withdrawal / row.inflFactor) : "—";
-      const tax = row.withdrawal > 0 ? fmt(row.tax) : "—";
-      bodyHTML += `<td>${fmt(row.total)}</td><td>${fmt(row.inflAdj)}</td><td>${wd}</td><td>${inflAdjWd}</td><td>${tax}</td></tr>`;
-    });
-    el.tableBody.innerHTML = bodyHTML;
+    // Facing pages: every year is on screen at once, the way a ledger spread
+    // works, rather than a scroll box hiding the drawdown years.
+    const half = Math.ceil(data.length / 2);
+    el.tableA.innerHTML = head + body(data.slice(0, half));
+    el.tableB.innerHTML = data.length > half ? head + body(data.slice(half)) : "";
   }
 
   // ── Tax Summary ──
   function renderTaxSummary(cfg, income) {
     const { byTax } = income;
     const total = income.totalBalance;
-    const pct = (v) => (total > 0 ? ((v / total) * 100).toFixed(1) : "0.0");
+    const buckets = [
+      { key: "pretax",  label: "Pre-tax" },
+      { key: "roth",    label: "Roth" },
+      { key: "taxable", label: "Taxable" },
+    ];
+    const colors = [ACCOUNT_COLORS[0], ACCOUNT_COLORS[1], ACCOUNT_COLORS[2]];
     const taxRatePct = (cfg.taxRatePct * 100).toFixed(0);
     const capGainsPct = (TAXABLE_GAIN_FRACTION * CAP_GAINS_RATE * 100).toFixed(1);
 
+    el.taxBar.innerHTML = total > 0
+      ? '<div class="track">' + buckets.map((b, i) => {
+          const pc = (byTax[b.key].balance / total) * 100;
+          if (pc <= 0) return "";
+          return '<div class="seg" style="flex:' + pc.toFixed(2) + ";background:" + colors[i] +
+            ';opacity:.85" title="' + b.label + " " + pc.toFixed(1) + '%"></div>';
+        }).join("") + "</div>" +
+        '<div class="keys">' + buckets.map((b, i) => {
+          const d = byTax[b.key], pc = (d.balance / total) * 100;
+          return '<span class="key"><span class="dot" style="background:' + colors[i] + '"></span>' +
+            b.label + " <b>" + fmtAxis(d.balance) + '</b> <span class="pc">' + pc.toFixed(0) + "%</span></span>";
+        }).join("") + "</div>"
+      : "";
+
+    el.taxRows.innerHTML =
+      '<div class="lr head"><span>Treatment</span><span>Balance</span><span>Monthly tax</span></div>' +
+      buckets.map((b, i) => {
+        const d = byTax[b.key];
+        return '<div class="lr"><span class="nm"><span class="sw" style="background:' + colors[i] + '"></span>' +
+          b.label + '</span><span class="amt">' + fmt(d.balance) + "</span>" +
+          '<span class="tax">' + (d.tax > 0.5 ? fmt(d.tax) : "&mdash;") + "</span></div>";
+      }).join("") +
+      '<div class="lr total"><span class="nm">Total</span><span class="amt">' + fmt(total) +
+      '</span><span class="tax">' + fmt(income.taxMonthly) + "</span></div>";
+
+    // Name where the bill comes from: a 100%-pre-tax portfolio showing monthly
+    // tax is correct, not a bug, and the panel should say why.
+    const taxed = [];
+    if (byTax.pretax.balance > 0) taxed.push("pre-tax withdrawals at " + taxRatePct + "%");
+    if (byTax.taxable.balance > 0) taxed.push("taxable gains at ~" + capGainsPct + "% effective");
+
     const ssLine = income.ssActive
-      ? `Includes Social Security: ${fmt(income.ssMonthly)}`
-      : `Social Security not included — starts at age ${cfg.ssStartAge}, after you retire at ${cfg.retireAge}`;
+      ? "Includes Social Security of " + fmt(income.ssMonthly) + "."
+      : "Social Security is not included — it starts at age " + cfg.ssStartAge +
+        ", after you retire at " + cfg.retireAge + ".";
 
-    // Naming which balances actually generate the tax bill: a 100% pre-tax portfolio
-    // showing a monthly tax figure is correct, not a bug, and the card should say why.
-    const taxedBuckets = [];
-    if (byTax.pretax.balance > 0) taxedBuckets.push(`pre-tax withdrawals at ${taxRatePct}%`);
-    if (byTax.taxable.balance > 0) taxedBuckets.push(`taxable gains at ~${capGainsPct}% effective`);
-    const sourceLine = taxedBuckets.length
-      ? `From ${taxedBuckets.join(" and ")}`
-      : "Nothing here is taxed on withdrawal";
-
-    el.taxSummary.innerHTML = `
-      <div class="tax-group">
-        <h3 style="color: var(--clr-pretax)">Pre-tax</h3>
-        <div class="amount">${fmt(byTax.pretax.balance)}</div>
-        <div class="detail">${pct(byTax.pretax.balance)}% of portfolio</div>
-        <div class="detail">Contributions were never taxed, so every dollar withdrawn is taxed as income at ${taxRatePct}%</div>
-        <div class="detail">Est. ${fmt(byTax.pretax.tax)}/mo in tax</div>
-      </div>
-      <div class="tax-group">
-        <h3 style="color: var(--clr-roth)">Roth / Post-tax</h3>
-        <div class="amount">${fmt(byTax.roth.balance)}</div>
-        <div class="detail">${pct(byTax.roth.balance)}% of portfolio</div>
-        <div class="detail">Already taxed going in — withdrawals are tax-free</div>
-        <div class="detail">Est. $0/mo in tax</div>
-      </div>
-      <div class="tax-group">
-        <h3 style="color: var(--clr-taxable)">Taxable</h3>
-        <div class="amount">${fmt(byTax.taxable.balance)}</div>
-        <div class="detail">${pct(byTax.taxable.balance)}% of portfolio</div>
-        <div class="detail">Est. ${(CAP_GAINS_RATE * 100).toFixed(0)}% on ~${(TAXABLE_GAIN_FRACTION * 100).toFixed(0)}% gains</div>
-        <div class="detail">Est. ${fmt(byTax.taxable.tax)}/mo in tax</div>
-      </div>
-      <div class="tax-group tax-impact">
-        <h3>Monthly Tax Impact</h3>
-        <div class="amount">${fmt(income.netMonthly)} <span style="font-size:0.75rem;font-weight:400;color:var(--clr-text-muted)">/ month after tax</span></div>
-        <div class="detail">Gross withdrawal ${fmt(income.grossMonthly)} &minus; tax ${fmt(income.taxMonthly)}</div>
-        <div class="detail">${sourceLine}</div>
-        <div class="detail">${ssLine}</div>
-        <div class="detail tax-note">Today's dollars, assuming the portfolio keeps earning and is drawn down to zero by age ${cfg.lifeExp}</div>
-      </div>
-    `;
+    el.taxNote.innerHTML =
+      "<p>Pre-tax contributions were never taxed, so the whole withdrawal is ordinary income. " +
+      "A portfolio that is mostly pre-tax owes tax on the way out — that is the deferral " +
+      "coming due, not an error. <b>Roth balances withdraw clean.</b></p>" +
+      "<p>Sustainable income is " + fmt(income.grossMonthly) + " a month gross, " +
+      (taxed.length ? "less " + fmt(income.taxMonthly) + " from " + taxed.join(" and ") : "with nothing taxed on withdrawal") +
+      ", leaving <b>" + fmt(income.netMonthly) + "</b> a month. " + ssLine + "</p>" +
+      "<p>Today's dollars, assuming the portfolio keeps earning and is drawn down to zero by age " +
+      cfg.lifeExp + ".</p>";
   }
 
   // ── Export / Import ──
@@ -1313,7 +1370,85 @@
     reader.readAsText(file);
   }
 
+  // ── Drawers ──
+  // No scrim: a blocking overlay would dim the chart and swallow toolbar
+  // clicks, which fights the reason the panel is open — watching the
+  // projection move as a number changes.
+  const PANELS = [
+    { btn: el.btnPlan, el: el.drawerPlan },
+    { btn: el.btnAccounts, el: el.drawerAccounts },
+  ];
+
+  function setPanel(target, open) {
+    PANELS.forEach((pn) => {
+      const on = open && pn === target;
+      pn.btn.setAttribute("aria-expanded", String(on));
+      if (on) {
+        pn.el.hidden = false;
+        requestAnimationFrame(() => pn.el.classList.add("on"));
+      } else {
+        pn.el.classList.remove("on");
+      }
+    });
+    if (open && target) {
+      const first = target.el.querySelector("input, select, button");
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+
+  // A drawer starts at the toolbar's bottom edge, so it never covers the trigger
+  // that opened it or the one next to it — switching panels stays a single click.
+  // The toolbar is sticky, so that edge moves until it docks; track it.
+  const toolbarEl = document.querySelector(".toolbar");
+  let drawerTopQueued = false;
+  function fitDrawerTop() {
+    drawerTopQueued = false;
+    const bottom = toolbarEl ? Math.max(0, Math.round(toolbarEl.getBoundingClientRect().bottom)) : 0;
+    document.documentElement.style.setProperty("--drawer-top", bottom + "px");
+  }
+  function queueDrawerTop() {
+    if (drawerTopQueued) return;
+    drawerTopQueued = true;
+    requestAnimationFrame(fitDrawerTop);
+  }
+  fitDrawerTop();
+  window.addEventListener("resize", queueDrawerTop);
+  window.addEventListener("scroll", queueDrawerTop, { passive: true });
+
+  const anyPanelOpen = () => PANELS.some((pn) => pn.btn.getAttribute("aria-expanded") === "true");
+
+  PANELS.forEach((pn) => {
+    pn.btn.addEventListener("click", () =>
+      setPanel(pn, pn.btn.getAttribute("aria-expanded") !== "true"));
+    pn.el.querySelector(".drawer-close").addEventListener("click", () => {
+      setPanel(null, false);
+      pn.btn.focus();
+    });
+    // Keep a closed drawer out of the tab order without killing the slide-out
+    pn.el.addEventListener("transitionend", (e) => {
+      if (e.propertyName === "transform" && !pn.el.classList.contains("on")) pn.el.hidden = true;
+    });
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!anyPanelOpen()) return;
+    const inside = PANELS.some((pn) => pn.el.contains(e.target) || pn.btn.contains(e.target));
+    if (!inside) setPanel(null, false);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !anyPanelOpen()) return;
+    const open = PANELS.find((pn) => pn.btn.getAttribute("aria-expanded") === "true");
+    setPanel(null, false);
+    if (open) open.btn.focus();
+  });
+
   // ── Event Binding ──
+  el.hit.addEventListener("pointermove", (e) => { if (chartHover) chartHover(e); });
+  el.hit.addEventListener("pointerleave", () => { if (chartLeave) chartLeave(); });
+  // A stale tooltip keeps a position computed for the old width
+  window.addEventListener("resize", () => { if (chartLeave) chartLeave(); });
+
   el.addBtn.addEventListener("click", () => {
     addAccount(el.templateSelect.value);
   });
@@ -1334,22 +1469,22 @@
   });
 
   el.runMcBtn.addEventListener("click", runMonteCarlo);
+  el.mcTrials.addEventListener("change", () => {
+    saveState();
+    if (!mcResults) renderMonteCarlo();
+  });
 
   [el.globalReturnEnabled, el.globalReturn].forEach((input) => {
     input.addEventListener("input", applyReturnOverrideToCards);
   });
 
-  // Trial count lives outside the input panel, so it needs its own save hook
-  el.mcTrials.addEventListener("change", saveState);
-
-  // Recalculate on any global input change
-  document.querySelectorAll(".input-panel input, .input-panel select").forEach((inp) => {
-    if (!inp.closest(".account-card")) {
-      inp.addEventListener("input", () => {
-        recalculate();
-        saveState();
-      });
-    }
+  // Recalculate on any global input change. Account fields bind their own
+  // handlers when their card is built, so they are excluded here.
+  document.querySelectorAll("#drawerPlan input, #drawerPlan select").forEach((inp) => {
+    inp.addEventListener("input", () => {
+      recalculate();
+      saveState();
+    });
   });
 
   // ── Init: load saved state or add a default 401(k) ──

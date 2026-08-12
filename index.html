@@ -5,285 +5,270 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Retirement Planner</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Retirement Planner</h1>
-    <p class="subtitle">Plan your financial future with confidence</p>
-  </header>
 
-  <main class="app-layout">
-    <!-- INPUT PANEL -->
-    <section class="input-panel">
+  <div class="sheet">
 
-      <div class="panel-section">
-        <h2>Personal Info</h2>
-        <div class="form-grid">
-          <label>
-            <span>Date of Birth</span>
-            <input type="date" id="birthdate" value="1976-06-15">
-          </label>
-          <label>
-            <span>Retirement Age</span>
-            <input type="number" id="retirementAge" value="65" min="18" max="100">
-          </label>
-          <label>
-            <span>Life Expectancy</span>
-            <input type="number" id="lifeExpectancy" value="90" min="50" max="120">
-          </label>
-          <label>
-            <span>Annual Income</span>
-            <div class="input-prefix">
-              <span class="prefix">$</span>
-              <input type="number" id="annualIncome" value="75000" min="0" step="1000">
-            </div>
-          </label>
-          <label>
-            <span>Withdrawal Strategy</span>
-            <select id="withdrawalStrategy">
-              <option value="fixed">Fixed Monthly Amount</option>
-              <option value="4pct">4% Rule</option>
-              <option value="pct">Custom % of Balance</option>
-            </select>
-          </label>
-          <label id="expensesLabel">
-            <span>Monthly Expenses in Retirement</span>
-            <div class="input-prefix">
-              <span class="prefix">$</span>
-              <input type="number" id="monthlyExpenses" value="4000" min="0" step="100">
-            </div>
-          </label>
-          <label id="withdrawalPctLabel" style="display:none">
-            <span>Annual Withdrawal Rate (%)</span>
-            <input type="number" id="withdrawalPct" value="4" min="0" max="20" step="0.1">
-          </label>
+    <header class="masthead">
+      <div class="mast-id">
+        <div class="mast-line">
+          <h1>Retirement Planner</h1>
+          <span class="kicker">Projection</span>
         </div>
+        <p class="digest" id="digest"></p>
       </div>
+      <span class="filed">Prepared for<b id="filedFor">your plan</b></span>
+    </header>
 
-      <div class="panel-section">
-        <h2>Retirement Accounts</h2>
-        <div id="accountsList"></div>
-        <datalist id="ownerNames"></datalist>
-        <div class="add-account-row">
-          <select id="accountTemplate">
-            <option value="401k">401(k)</option>
-            <option value="rothIra">Roth IRA</option>
-            <option value="traditionalIra">Traditional IRA</option>
-            <option value="brokerage">Brokerage</option>
-            <option value="hsa">HSA</option>
-            <option value="custom">Custom Account</option>
+    <div class="toolbar">
+      <div class="mc">
+        <label class="mc-trials">
+          <span>Trials</span>
+          <select id="mcTrials" aria-label="Number of simulation trials">
+            <option value="1000">1,000</option>
+            <option value="2000">2,000</option>
+            <option value="5000" selected>5,000</option>
+            <option value="10000">10,000</option>
           </select>
-          <button id="addAccountBtn" class="btn btn-primary">+ Add Account</button>
-        </div>
+        </label>
+        <button class="mc-run" type="button" id="runMcBtn">Run simulation</button>
+        <span class="mc-state" id="mcState"></span>
+        <span class="mc-bar" id="mcProgress" hidden><i id="mcProgressBar"></i></span>
       </div>
 
-      <div class="panel-section">
-        <h2>General Settings</h2>
-        <div class="form-grid">
-          <label>
-            <span>Inflation Rate (%)</span>
-            <input type="number" id="inflationRate" value="3" min="0" max="15" step="0.1">
-          </label>
-          <label>
-            <span>Monthly Social Security</span>
-            <div class="input-prefix">
-              <span class="prefix">$</span>
-              <input type="number" id="socialSecurity" value="1800" min="0" step="50">
-            </div>
-          </label>
-          <label>
-            <span>Social Security Start Age</span>
-            <input type="number" id="ssStartAge" value="67" min="62" max="70">
-          </label>
-          <label>
-            <span>Effective Tax Rate in Retirement (%)</span>
-            <input type="number" id="taxRate" value="20" min="0" max="50" step="0.5">
-          </label>
-          <label title="How closely accounts move together in the Monte Carlo simulation. 0% = each account moves independently, 100% = all accounts rise and fall together.">
-            <span>Asset Correlation (%)</span>
-            <input type="number" id="assetCorrelation" value="70" min="0" max="100" step="5">
-          </label>
-        </div>
-
-        <div class="override-row">
-          <label class="checkbox-label" title="Applies one return assumption to every account, ignoring the per-account rates.">
-            <input type="checkbox" id="globalReturnEnabled">
-            <span>Override every account's annual return</span>
-          </label>
-          <label id="globalReturnLabel" class="override-input">
-            <span>Global Annual Return (%)</span>
-            <input type="number" id="globalReturn" value="7" min="0" max="30" step="0.1">
-          </label>
-        </div>
-        <div class="export-import-row">
-          <button id="exportBtn" class="btn btn-secondary">Export Data</button>
-          <button id="importBtn" class="btn btn-secondary">Import Data</button>
-          <input type="file" id="importFile" accept=".json" style="display:none">
-        </div>
+      <div class="triggers">
+        <button class="panel-btn" type="button" id="btnPlan" aria-expanded="false" aria-controls="drawerPlan">
+          Plan &amp; assumptions <span class="ico">&#9654;</span>
+        </button>
+        <button class="panel-btn" type="button" id="btnAccounts" aria-expanded="false" aria-controls="drawerAccounts">
+          Accounts <span class="ico">&#9654;</span>
+        </button>
       </div>
+    </div>
 
-    </section>
+    <main class="stack">
 
-    <!-- OUTPUT PANEL -->
-    <section class="output-panel">
-
-      <div class="summary-cards" id="summaryCards">
-        <div class="summary-card">
-          <span class="card-label">Total at Retirement</span>
-          <span class="card-value" id="totalAtRetirement">$0</span>
+      <section class="plate">
+        <header>
+          <h2>Portfolio through life expectancy</h2>
+          <span class="cap">Fig. 1 &middot; today's dollars</span>
+          <div class="legend" id="chartLegend"></div>
+        </header>
+        <div class="plot" id="plot">
+          <svg id="projectionChart" viewBox="0 0 1200 480" preserveAspectRatio="xMidYMid meet" role="img"
+               aria-label="Portfolio balance by age in today's dollars, with the simulated interquartile range"></svg>
+          <div class="hit"></div>
+          <div class="tip"></div>
         </div>
-        <div class="summary-card">
-          <span class="card-label">Inflation-Adjusted</span>
-          <span class="card-value" id="inflationAdjusted">$0</span>
-        </div>
-        <div class="summary-card">
-          <span class="card-label">Monthly Income (After Tax, Today's $)</span>
-          <span class="card-value" id="monthlyIncome">$0</span>
-        </div>
-        <div class="summary-card">
-          <span class="card-label">Years of Coverage</span>
-          <span class="card-value" id="yearsCoverage">0</span>
-        </div>
-      </div>
-
-      <div class="panel-section" id="monteCarloSection">
-        <div class="mc-header">
-          <h2>Monte Carlo Simulation</h2>
-          <div class="mc-controls">
-            <select id="mcTrials" aria-label="Number of trials">
-              <option value="1000">1,000 trials</option>
-              <option value="5000" selected>5,000 trials</option>
-              <option value="10000">10,000 trials</option>
-            </select>
-            <button id="runMcBtn" class="btn btn-primary">Run Simulation</button>
+        <div class="figures">
+          <div class="fig">
+            <div class="k">At retirement</div>
+            <div class="v" id="inflationAdjusted">$0</div>
+            <div class="n">Today's dollars, all accounts</div>
+          </div>
+          <div class="fig">
+            <div class="k">Nominal at retirement</div>
+            <div class="v" id="totalAtRetirement">$0</div>
+            <div class="n">Before inflation</div>
+          </div>
+          <div class="fig">
+            <div class="k">Monthly income</div>
+            <div class="v accent" id="monthlyIncome">$0</div>
+            <div class="n">After tax, today's $</div>
+          </div>
+          <div class="fig">
+            <div class="k">Simulated success</div>
+            <div class="v" id="mcSuccessRate">&mdash;</div>
+            <div class="n" id="mcSuccessNote">Run a simulation to test the plan against random markets</div>
           </div>
         </div>
+      </section>
 
-        <div class="mc-progress" id="mcProgress" hidden>
-          <div class="mc-progress-bar" id="mcProgressBar"></div>
+      <section class="plate">
+        <header><h2>Tax at withdrawal</h2></header>
+        <div class="taxbar" id="taxBar"></div>
+        <div class="taxgrid">
+          <div class="ledger-rows" id="taxRows"></div>
+          <div class="note" id="taxNote"></div>
         </div>
+      </section>
 
-        <p class="mc-note" id="mcEmpty">
-          The projection above assumes every account earns its expected return every single year.
-          Run a simulation to see how the plan holds up across thousands of randomized market paths.
-        </p>
-
-        <p class="mc-note mc-stale" id="mcStale" hidden>
-          Inputs have changed since this simulation ran — re-run for updated results.
-        </p>
-
-        <div class="mc-results" id="mcResults" hidden>
-          <div class="mc-stat mc-stat-primary">
-            <span class="card-label">Success Rate</span>
-            <span class="card-value" id="mcSuccessRate">—</span>
-            <span class="mc-stat-note" id="mcSuccessNote"></span>
-          </div>
-          <div class="mc-stat">
-            <span class="card-label">Median Ending Balance</span>
-            <span class="card-value" id="mcMedianEnd">—</span>
-            <span class="mc-stat-note">50th percentile at life expectancy</span>
-          </div>
-          <div class="mc-stat">
-            <span class="card-label">Poor Market (10th pct)</span>
-            <span class="card-value" id="mcP10End">—</span>
-            <span class="mc-stat-note" id="mcP10Note">1 in 10 outcomes end below this</span>
-          </div>
-          <div class="mc-stat">
-            <span class="card-label">Median Depletion Age</span>
-            <span class="card-value" id="mcDepletionAge">—</span>
-            <span class="mc-stat-note" id="mcDepletionNote">Among trials that run out</span>
-          </div>
+      <section class="plate">
+        <header>
+          <h2>Year by year</h2>
+          <span class="cap">Today's dollars</span>
+        </header>
+        <div class="pages">
+          <div class="tbl-wrap"><table id="yearTableA"></table></div>
+          <div class="tbl-wrap"><table id="yearTableB"></table></div>
         </div>
+      </section>
+
+    </main>
+
+    <footer class="colophon">
+      <span>Everything is stored in this browser only.</span>
+      <div class="colophon-actions">
+        <a href="instructions.html">How this works</a>
+        <button id="exportBtn" class="linkish" type="button">Export data</button>
+        <button id="importBtn" class="linkish" type="button">Import data</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ── Plan &amp; assumptions drawer ── -->
+  <aside class="drawer" id="drawerPlan" role="dialog" aria-labelledby="drawerPlanTitle" hidden>
+    <div class="drawer-head">
+      <h2 id="drawerPlanTitle">Plan &amp; assumptions</h2>
+      <button class="drawer-close" type="button" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <h3>The levers</h3>
+      <div class="fld">
+        <label for="retirementAge">Retirement age</label>
+        <input type="number" id="retirementAge" value="65" min="18" max="100">
+      </div>
+      <div class="fld">
+        <label for="withdrawalStrategy">Withdrawal strategy</label>
+        <select id="withdrawalStrategy">
+          <option value="fixed">Fixed monthly</option>
+          <option value="4pct">4% rule</option>
+          <option value="pct">Custom %</option>
+        </select>
+      </div>
+      <div class="fld" id="expensesLabel">
+        <label for="monthlyExpenses">Monthly expenses</label>
+        <input type="number" id="monthlyExpenses" value="4000" min="0" step="100">
+      </div>
+      <div class="fld" id="withdrawalPctLabel" hidden>
+        <label for="withdrawalPct">Annual withdrawal rate</label>
+        <input type="number" id="withdrawalPct" value="4" min="0" max="20" step="0.1">
       </div>
 
-      <div class="panel-section">
-        <h2>Portfolio Projection</h2>
-        <div class="chart-container">
-          <canvas id="projectionChart"></canvas>
-        </div>
+      <h3>Assumptions</h3>
+      <div class="fld">
+        <label for="birthdate">Date of birth</label>
+        <input type="date" id="birthdate" value="1980-01-01">
+      </div>
+      <div class="fld">
+        <label for="lifeExpectancy">Life expectancy</label>
+        <input type="number" id="lifeExpectancy" value="90" min="50" max="120">
+      </div>
+      <div class="fld">
+        <label for="annualIncome">Annual income</label>
+        <input type="number" id="annualIncome" value="75000" min="0" step="1000">
+      </div>
+      <div class="fld">
+        <label for="inflationRate">Inflation rate (%)</label>
+        <input type="number" id="inflationRate" value="3" min="0" max="15" step="0.1">
+      </div>
+      <div class="fld">
+        <label for="taxRate">Tax rate in retirement (%)</label>
+        <input type="number" id="taxRate" value="20" min="0" max="50" step="0.5">
+      </div>
+      <div class="fld">
+        <label for="socialSecurity">Monthly Social Security</label>
+        <input type="number" id="socialSecurity" value="1800" min="0" step="50">
+      </div>
+      <div class="fld">
+        <label for="ssStartAge">SS start age</label>
+        <input type="number" id="ssStartAge" value="67" min="62" max="70">
+      </div>
+      <div class="fld" title="How closely accounts move together in the simulation. 0% = independent, 100% = they all rise and fall together.">
+        <label for="assetCorrelation">Asset correlation (%)</label>
+        <input type="number" id="assetCorrelation" value="70" min="0" max="100" step="5">
       </div>
 
-      <div class="panel-section">
-        <h2>Tax Breakdown at Retirement</h2>
-        <div id="taxSummary" class="tax-summary"></div>
+      <h3>Return override</h3>
+      <label class="checkbox-label" title="Applies one return assumption to every account, ignoring the per-account rates.">
+        <input type="checkbox" id="globalReturnEnabled">
+        <span>Override every account's annual return</span>
+      </label>
+      <div class="fld" id="globalReturnLabel">
+        <label for="globalReturn">Global annual return (%)</label>
+        <input type="number" id="globalReturn" value="7" min="0" max="30" step="0.1">
       </div>
+    </div>
+  </aside>
 
-      <div class="panel-section">
-        <h2>Year-by-Year Breakdown</h2>
-        <div class="table-wrapper">
-          <table id="yearTable">
-            <thead>
-              <tr id="tableHeader"></tr>
-            </thead>
-            <tbody id="tableBody"></tbody>
-          </table>
-        </div>
+  <!-- ── Accounts drawer ── -->
+  <aside class="drawer" id="drawerAccounts" role="dialog" aria-labelledby="drawerAccountsTitle" hidden>
+    <div class="drawer-head">
+      <h2 id="drawerAccountsTitle">Accounts</h2>
+      <button class="drawer-close" type="button" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <div id="accountsList"></div>
+      <datalist id="ownerNames"></datalist>
+      <div class="add-account-row">
+        <select id="accountTemplate" aria-label="Account type to add">
+          <option value="401k">401(k)</option>
+          <option value="rothIra">Roth IRA</option>
+          <option value="traditionalIra">Traditional IRA</option>
+          <option value="brokerage">Brokerage</option>
+          <option value="hsa">HSA</option>
+          <option value="custom">Custom Account</option>
+        </select>
+        <button id="addAccountBtn" class="add" type="button">Add account</button>
       </div>
-
-    </section>
-  </main>
+    </div>
+  </aside>
 
   <!-- Account card template -->
   <template id="accountTemplate-tpl">
-    <div class="account-card" data-id="">
-      <div class="account-header">
-        <button class="collapse-toggle" aria-label="Toggle account details">&#9660;</button>
-        <span class="account-name-display"></span>
-        <span class="owner-chip"></span>
-        <span class="tax-badge"></span>
-        <button class="remove-btn" aria-label="Remove account">&times;</button>
-      </div>
-      <div class="account-body">
-        <div class="form-grid">
-          <label>
-            <span>Account Name</span>
-            <input type="text" class="acc-name" placeholder="e.g. Fidelity 401(k)">
-          </label>
-          <label title="Who owns this account. Accounts are grouped by owner and each owner gets a subtotal column in the year-by-year table.">
-            <span>Owner</span>
-            <input type="text" class="acc-owner" list="ownerNames" placeholder="e.g. a first name">
-          </label>
-          <label>
-            <span>Tax Treatment</span>
-            <select class="acc-tax">
-              <option value="pretax">Pre-tax</option>
-              <option value="roth">Post-tax / Roth</option>
-              <option value="taxable">Taxable</option>
-            </select>
-          </label>
-          <label>
-            <span>Current Balance</span>
-            <div class="input-prefix">
-              <span class="prefix">$</span>
-              <input type="number" class="acc-balance" value="0" min="0" step="100">
-            </div>
-          </label>
-          <label>
-            <span>Monthly Contribution</span>
-            <div class="input-prefix">
-              <span class="prefix">$</span>
-              <input type="number" class="acc-contribution" value="500" min="0" step="50">
-            </div>
-          </label>
-          <label class="employer-match-field">
-            <span>Employer Match (%)</span>
-            <input type="number" class="acc-match-pct" value="0" min="0" max="100" step="0.5">
-          </label>
-          <label class="employer-match-field">
-            <span>Match Cap (% of salary)</span>
-            <input type="number" class="acc-match-cap" value="0" min="0" max="100" step="0.5">
-          </label>
-          <label class="acc-return-field">
-            <span>Annual Return (%)</span>
-            <input type="number" class="acc-return" value="7" min="0" max="30" step="0.1">
-            <small class="override-note" hidden>Overridden by the global rate in General Settings</small>
-          </label>
-          <label title="Annual standard deviation of returns. Used only by the Monte Carlo simulation. 0% means this account always earns exactly its expected return.">
-            <span>Volatility (% std dev)</span>
-            <input type="number" class="acc-volatility" value="15" min="0" max="60" step="0.5">
-          </label>
+    <div class="acct" data-id="" data-open="false">
+      <button class="acct-head" type="button" aria-expanded="false">
+        <span class="chev">&#9654;</span>
+        <span class="sw"></span>
+        <span class="nm"><span class="account-name-display"></span><small class="tax-badge"></small></span>
+        <span class="amt"></span>
+      </button>
+      <div class="acct-body">
+        <div class="fld">
+          <label>Account name</label>
+          <input type="text" class="acc-name" placeholder="e.g. Fidelity 401(k)">
         </div>
+        <div class="fld" title="Who owns this account. Accounts group by owner and each owner gets a subtotal column in the table.">
+          <label>Owner</label>
+          <input type="text" class="acc-owner" list="ownerNames" placeholder="e.g. a first name">
+        </div>
+        <div class="fld">
+          <label>Tax treatment</label>
+          <select class="acc-tax">
+            <option value="pretax">Pre-tax</option>
+            <option value="roth">Post-tax / Roth</option>
+            <option value="taxable">Taxable</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>Current balance</label>
+          <input type="number" class="acc-balance" value="0" min="0" step="100">
+        </div>
+        <div class="fld">
+          <label>Monthly contribution</label>
+          <input type="number" class="acc-contribution" value="500" min="0" step="50">
+        </div>
+        <div class="fld employer-match-field">
+          <label>Employer match (%)</label>
+          <input type="number" class="acc-match-pct" value="0" min="0" max="100" step="0.5">
+        </div>
+        <div class="fld employer-match-field">
+          <label>Match cap (% of salary)</label>
+          <input type="number" class="acc-match-cap" value="0" min="0" max="100" step="0.5">
+        </div>
+        <div class="fld acc-return-field">
+          <label>Annual return (%)</label>
+          <input type="number" class="acc-return" value="7" min="0" max="30" step="0.1">
+        </div>
+        <p class="override-note" hidden>Overridden by the global rate in Plan &amp; assumptions.</p>
+        <div class="fld" title="Annual standard deviation of returns. Used only by the simulation.">
+          <label>Volatility (%)</label>
+          <input type="number" class="acc-volatility" value="15" min="0" max="60" step="0.5">
+        </div>
+        <button class="remove-btn" type="button">Remove account</button>
       </div>
     </div>
   </template>
