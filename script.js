@@ -147,12 +147,16 @@
       acc.volatility = DEFAULT_VOLATILITY;
     }
     if (typeof acc.owner !== "string") {
-      // Saves written before accounts had an owner encoded the person in the name
-      // ("Peter 401(k)"), which is what the old hard-coded Peter/Lisa subtotal
+      // Saves written before accounts had an owner encoded the person in the
+      // account name ("<name> 401(k)"), which is what the old per-person subtotal
       // columns matched on. Lift that prefix into a real owner field so those
       // subtotals keep working instead of silently reading $0.
+      //
+      // Matched structurally — a leading word followed by a recognised account
+      // type — rather than against a list of names, so this works for any
+      // household and keeps no one's name in the source.
       const m = /^([A-Za-z][A-Za-z.'-]*)\s+(.*\S)$/.exec(acc.name || "");
-      if (m && LEGACY_OWNER_PREFIXES.includes(m[1].toLowerCase())) {
+      if (m && isKnownAccountType(m[2])) {
         acc.owner = m[1];
         acc.name = m[2];
       } else {
@@ -163,8 +167,13 @@
     return acc;
   }
 
-  // Owner names the pre-owner-field version of the app grouped on.
-  const LEGACY_OWNER_PREFIXES = ["peter", "lisa"];
+  // The account names the presets ship with, used to spot a legacy
+  // "<owner> <account>" name without hard-coding anyone's name.
+  const PRESET_NAMES = Object.keys(PRESETS).map((k) => PRESETS[k].name.toLowerCase());
+
+  function isKnownAccountType(name) {
+    return PRESET_NAMES.includes(name.trim().toLowerCase());
+  }
 
   const UNASSIGNED = "Unassigned";
 
@@ -1156,7 +1165,7 @@
   }
 
   // ── Table ──
-  // Subtotal columns, one per owner. These used to be a hard-coded ["Peter", "Lisa"]
+  // Subtotal columns, one per owner. These used to be a hard-coded pair of names
   // matched against the start of each account's name, so they read $0 for anyone whose
   // accounts were not named that way. They now follow the owner field on each account.
   function ownerColumns() {
